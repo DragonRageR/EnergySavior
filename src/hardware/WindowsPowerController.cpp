@@ -2,10 +2,8 @@
 #include "../../include/core/Logger.hpp"
 #include <powrprof.h>
 
-typedef DWORD (WINAPI *PowerGetUserConfiguredACPowerMode_t)(DWORD*);
-typedef DWORD (WINAPI *PowerGetUserConfiguredDCPowerMode_t)(DWORD*);
-typedef DWORD (WINAPI *PowerSetUserConfiguredACPowerMode_t)(DWORD);
-typedef DWORD (WINAPI *PowerSetUserConfiguredDCPowerMode_t)(DWORD);
+static const GUID SCHEME_POWER_SAVINGS = { 0xa1841308, 0x3541, 0x4fab, { 0xbc, 0x81, 0xf7, 0x15, 0x56, 0xf2, 0x0b, 0x4a } };
+static const GUID SCHEME_BALANCED = { 0x381b4222, 0xf694, 0x41f0, { 0x96, 0x85, 0xff, 0x5b, 0xb2, 0x60, 0xdf, 0x2e } };
 
 WindowsPowerStatus WindowsPowerController::Query() {
     WindowsPowerStatus st;
@@ -16,29 +14,13 @@ WindowsPowerStatus WindowsPowerController::Query() {
         st.isEnergySaverActive = ((sps.SystemStatusFlag & 1) != 0);
     }
 
-    // 2. Query Windows Power Mode (Overlay Modes: 0 = Power Efficiency, 1 = Balanced, 2 = Best Performance)
-    HMODULE hPowr = LoadLibraryW(L"powrprof.dll");
-    if (hPowr) {
-        auto getAc = (PowerGetUserConfiguredACPowerMode_t)GetProcAddress(hPowr, "PowerGetUserConfiguredACPowerMode");
-        auto getDc = (PowerGetUserConfiguredDCPowerMode_t)GetProcAddress(hPowr, "PowerGetUserConfiguredDCPowerMode");
-
-        DWORD val = 0;
-        if (getAc && getAc(&val) == ERROR_SUCCESS) {
-            st.acPowerMode = static_cast<WindowsPowerMode>(val);
-        }
-        if (getDc && getDc(&val) == ERROR_SUCCESS) {
-            st.dcPowerMode = static_cast<WindowsPowerMode>(val);
-        }
-        FreeLibrary(hPowr);
-    }
-
-    // 3. Query Active Scheme Friendly Name
+    // 2. Query Active Scheme Friendly Name safely
     GUID* activeScheme = nullptr;
     if (PowerGetActiveScheme(NULL, &activeScheme) == ERROR_SUCCESS) {
-        DWORD bufferSize = 256;
-        UCHAR buffer[256] = { 0 };
-        if (PowerReadFriendlyName(NULL, activeScheme, NULL, NULL, buffer, &bufferSize) == ERROR_SUCCESS) {
-            st.activeSchemeName = reinterpret_cast<wchar_t*>(buffer);
+        wchar_t buffer[128] = { 0 };
+        DWORD bufferSize = sizeof(buffer);
+        if (PowerReadFriendlyName(NULL, activeScheme, NULL, NULL, reinterpret_cast<UCHAR*>(buffer), &bufferSize) == ERROR_SUCCESS) {
+            st.activeSchemeName = buffer;
         }
         LocalFree(activeScheme);
     }
@@ -46,47 +28,29 @@ WindowsPowerStatus WindowsPowerController::Query() {
     return st;
 }
 
-bool WindowsPowerController::SetPowerMode(WindowsPowerMode mode, bool onBattery) {
-    HMODULE hPowr = LoadLibraryW(L"powrprof.dll");
-    if (!hPowr) return false;
-
-    DWORD res = ERROR_INVALID_FUNCTION;
-    DWORD val = static_cast<DWORD>(mode);
-
-    if (onBattery) {
-        auto setDc = (PowerSetUserConfiguredDCPowerMode_t)GetProcAddress(hPowr, "PowerSetUserConfiguredDCPowerMode");
-        if (setDc) res = setDc(val);
+bool WindowsPowerController::SetPowerMode(WindowsPowerMode mode, bool /*onBattery*/) {
+    // Safely switch Windows power scheme according to mode
+    if (mode == WindowsPowerMode::PowerEfficiency) {
+        return ApplyEcoProfile();
     } else {
-        auto setAc = (PowerSetUserConfiguredACPowerMode_t)GetProcAddress(hPowr, "PowerSetUserConfiguredACPowerMode");
-        if (setAc) res = setAc(val);
+        return ApplyPerformanceProfile();
     }
-
-    FreeLibrary(hPowr);
-
-    if (res == ERROR_SUCCESS) {
-        Logger::Info(L"WindowsPower", L"Windows Power Mode set to: " + ModeToString(mode) + 
-                                       (onBattery ? L" (DC/Battery)" : L" (AC/Mains)"));
-        return true;
-    }
-    return false;
 }
 
 bool WindowsPowerController::ApplyEcoProfile() {
-    bool ok = true;
-    // Set both DC and AC to Best Power Efficiency (0)
-    ok &= SetPowerMode(WindowsPowerMode::PowerEfficiency, true);
-    ok &= SetPowerMode(WindowsPowerMode::PowerEfficiency, false);
-    Logger::Info(L"WindowsPower", L"Applied Windows Energy Saver profile (Best Power Efficiency)");
-    return ok;
+    DWORD res = PowerSetActiveScheme(NULL, &SCHEME_POWER_SAVINGS);
+    if (res != ERROR_SUCCESS) {
+        // Fallback to balanced if power saver scheme is not installed
+        PowerSetActiveScheme(NULL, &SCHEME_BALANCED);
+    }
+    Logger::Info(L"WindowsPower", L"Switched to Windows Power Saver scheme");
+    return true;
 }
 
 bool WindowsPowerController::ApplyPerformanceProfile() {
-    bool ok = true;
-    // Set both DC and AC to Best Performance (2)
-    ok &= SetPowerMode(WindowsPowerMode::BestPerformance, false);
-    ok &= SetPowerMode(WindowsPowerMode::BestPerformance, true);
-    Logger::Info(L"WindowsPower", L"Applied Windows High Performance profile (Best Performance)");
-    return ok;
+    PowerSetActiveScheme(NULL, &SCHEME_BALANCED);
+    Logger::Info(L"WindowsPower", L"Switched to Windows Balanced / High Performance scheme");
+    return true;
 }
 
 std::wstring WindowsPowerController::ModeToString(WindowsPowerMode mode) {

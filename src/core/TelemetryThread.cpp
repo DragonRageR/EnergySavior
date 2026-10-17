@@ -132,14 +132,12 @@ void TelemetryThread::SetRefreshRate(DWORD hz) {
     Logger::Info(L"Display", L"Manual refresh rate switch to " + std::to_wstring(hz) + L" Hz");
     std::lock_guard<std::mutex> lock(s_mutex);
     s_data.refreshRate = hz;
-    s_data.isEcoMode = (s_data.refreshRate == 60 && s_data.cpuBoost == CpuBoostMode::Disabled);
 }
 
 void TelemetryThread::SetCpuBoost(CpuBoostMode mode) {
     Logger::Info(L"CPU", L"Manual CPU Boost mode switch: " + CpuController::ToString(mode));
     std::lock_guard<std::mutex> lock(s_mutex);
     s_data.cpuBoost = mode;
-    s_data.isEcoMode = (s_data.refreshRate == 60 && s_data.cpuBoost == CpuBoostMode::Disabled);
 }
 
 void TelemetryThread::SetThermalMode(ThermalMode mode) {
@@ -173,15 +171,11 @@ void TelemetryThread::WorkerLoop() {
         GpuMuxMode mux = LenovoWmi::GetMuxMode();
         KbdBacklight kbd = LenovoWmi::GetKeyboardLight();
         WindowsPowerStatus winPow = WindowsPowerController::Query();
-        bool elev = AppConfig::IsElevated();
-
-        bool isEco = (hz == 60 && boost == CpuBoostMode::Disabled);
-
         // Auto-switch with debouncing
         if (AppConfig::IsAutoSwitchEnabled()) {
             if (bat.isAcOnline != lastAc) {
                 s_acStateCounter++;
-                if (s_acStateCounter >= 2) { // 2 consecutive checks to avoid jitter
+                if (s_acStateCounter >= 2) {
                     lastAc = bat.isAcOnline;
                     s_acStateCounter = 0;
                     Logger::Info(L"PowerState", lastAc ? L"AC Power Connected (Mains)" : L"Switched to Battery Power (DC)");
@@ -199,7 +193,7 @@ void TelemetryThread::WorkerLoop() {
         // Monitor Windows Energy Saver changes from Windows OS
         if (winPow.isEnergySaverActive != lastWinSaver) {
             lastWinSaver = winPow.isEnergySaverActive;
-            Logger::Info(L"WindowsPower", lastWinSaver ? L"Windows Energy Saver is ACTIVE (Battery Saver on)" 
+            Logger::Info(L"WindowsPower", lastWinSaver ? L"Windows Energy Saver is ACTIVE" 
                                                        : L"Windows Energy Saver is OFF");
         }
 
@@ -213,8 +207,6 @@ void TelemetryThread::WorkerLoop() {
             s_data.muxMode = mux;
             s_data.kbdLight = kbd;
             s_data.winPower = winPow;
-            s_data.isEcoMode = isEco;
-            s_data.isElevated = elev;
         }
 
         // Notify UI to repaint without blocking

@@ -37,8 +37,9 @@ void GuiWindow::DrawCard(Graphics& g, int x, int y, int w, int h, const std::wst
 void GuiWindow::InitButtons() {
     s_buttons.clear();
 
-    // 1. Hero Mode Toggle (ID 1)
-    s_buttons.push_back({ 1, Rect(590, 74, 255, 88), L"[ ПЕРЕМИКАННЯ РЕЖИМУ ]\n(ЛКМ В ТРЕЇ)", false, false, Color(255, 0, 230, 118), Color(255, 30, 45, 60), Color(255, 25, 35, 48) });
+    // 1. Hero Mode Buttons (ID 1: Eco, ID 19: Perf)
+    s_buttons.push_back({ 1, Rect(585, 74, 125, 88), L"[ 🌿 ЕКО ]\n60Hz + Quiet", false, false, Color(255, 0, 230, 118), Color(255, 20, 50, 35), Color(255, 22, 27, 34) });
+    s_buttons.push_back({ 19, Rect(720, 74, 125, 88), L"[ 🚀 МАКС ]\n144Hz + Boost", false, false, Color(255, 0, 229, 255), Color(255, 20, 45, 60), Color(255, 22, 27, 34) });
 
     // 2. Refresh Rate 60 Hz (ID 2), 144 Hz (ID 3)
     s_buttons.push_back({ 2, Rect(30, 380, 195, 34), L"60 Hz (Енергозбереження)", false, false, Color(255, 0, 230, 118) });
@@ -223,7 +224,9 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
     bool autoSt = AppConfig::IsAutoStartEnabled();
 
     for (auto& btn : s_buttons) {
-        if (btn.id == 2) btn.isActive = (td.refreshRate == 60);
+        if (btn.id == 1) btn.isActive = td.isEcoMode;
+        else if (btn.id == 19) btn.isActive = !td.isEcoMode;
+        else if (btn.id == 2) btn.isActive = (td.refreshRate == 60);
         else if (btn.id == 3) btn.isActive = (td.refreshRate == 144);
         else if (btn.id == 4) btn.isActive = (td.cpuBoost == CpuBoostMode::Disabled);
         else if (btn.id == 5) btn.isActive = (td.cpuBoost == CpuBoostMode::Aggressive);
@@ -299,7 +302,7 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
         if (btn.id == 15) bBtnText.SetColor(Color(255, 255, 120, 120));
         if (btn.id == 18) bBtnText.SetColor(Color(255, 234, 179, 8));
 
-        if (btn.id == 1) {
+        if (btn.id == 1 || btn.id == 19) {
             g.DrawString(btn.text.c_str(), -1, &fHeroBtn, RectF((REAL)btn.bounds.X, (REAL)btn.bounds.Y, (REAL)btn.bounds.Width, (REAL)btn.bounds.Height), &sfCenter, &bBtnText);
         } else {
             g.DrawString(btn.text.c_str(), -1, &fBtn, RectF((REAL)btn.bounds.X, (REAL)btn.bounds.Y, (REAL)btn.bounds.Width, (REAL)btn.bounds.Height), &sfCenter, &bBtnText);
@@ -321,8 +324,11 @@ void GuiWindow::HandleClick(HWND hWnd, int x, int y) {
     for (const auto& btn : s_buttons) {
         if (btn.bounds.Contains(x, y)) {
             switch (btn.id) {
-                case 1: // Hero toggle
-                    TelemetryThread::ToggleMode();
+                case 1: // Hero Eco Profile
+                    TelemetryThread::ApplyEcoProfile();
+                    break;
+                case 19: // Hero Perf Profile
+                    TelemetryThread::ApplyPerformanceProfile();
                     break;
                 case 2: // 60 Hz
                     DisplayController::SetRefreshRate(60);
@@ -355,14 +361,17 @@ void GuiWindow::HandleClick(HWND hWnd, int x, int y) {
                 case 9: // MUX Hybrid
                     LenovoWmi::SetMuxMode(GpuMuxMode::Hybrid);
                     TelemetryThread::SetMuxMode(GpuMuxMode::Hybrid);
+                    TrayManager::ShowBalloon(L"Режим MUX змінено", L"Встановлено гібридний режим (Hybrid). Зміни набудуть чинності після перезавантаження комп'ютера.");
                     break;
                 case 10: // MUX iGPU Only
                     LenovoWmi::SetMuxMode(GpuMuxMode::iGpuOnly);
                     TelemetryThread::SetMuxMode(GpuMuxMode::iGpuOnly);
+                    TrayManager::ShowBalloon(L"Режим MUX змінено", L"Встановлено тільки iGPU. Зміни набудуть чинності після перезавантаження комп'ютера.");
                     break;
                 case 11: // MUX dGPU Only
                     LenovoWmi::SetMuxMode(GpuMuxMode::dGpuOnly);
                     TelemetryThread::SetMuxMode(GpuMuxMode::dGpuOnly);
+                    TrayManager::ShowBalloon(L"Режим MUX змінено", L"Встановлено тільки dGPU. Зміни набудуть чинності після перезавантаження комп'ютера.");
                     break;
                 case 12: // Toggle Keyboard Light
                     LenovoWmi::ToggleKeyboardLight();

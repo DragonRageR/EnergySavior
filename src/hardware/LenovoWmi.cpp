@@ -1,10 +1,35 @@
 #include "../../include/hardware/LenovoWmi.hpp"
-#include "../../include/core/AppConfig.hpp"
+#include "../../include/core/Logger.hpp"
+#include <wincrypt.h>
 #include <thread>
+#include <mutex>
+
+static std::mutex s_wmiMutex;
+
+static std::wstring EncodePowerShellScript(const std::wstring& script) {
+    DWORD size = 0;
+    const BYTE* bytes = reinterpret_cast<const BYTE*>(script.data());
+    DWORD byteLen = static_cast<DWORD>(script.size() * sizeof(wchar_t));
+    if (CryptBinaryToStringW(bytes, byteLen, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &size)) {
+        std::wstring out(size, 0);
+        if (CryptBinaryToStringW(bytes, byteLen, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, &out[0], &size)) {
+            while (!out.empty() && (out.back() == 0 || out.back() == L'\r' || out.back() == L'\n')) {
+                out.pop_back();
+            }
+            return out;
+        }
+    }
+    return L"";
+}
 
 void LenovoWmi::ExecuteSilentWmi(const std::wstring& powershellBody) {
     std::thread([powershellBody]() {
-        std::wstring cmd = L"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"" + powershellBody + L"\"";
+        std::lock_guard<std::mutex> lock(s_wmiMutex);
+
+        std::wstring b64 = EncodePowerShellScript(powershellBody);
+        if (b64.empty()) return;
+
+        std::wstring cmd = L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + b64;
 
         STARTUPINFOW si = { sizeof(si) };
         si.dwFlags = STARTF_USESHOWWINDOW;
@@ -14,7 +39,7 @@ void LenovoWmi::ExecuteSilentWmi(const std::wstring& powershellBody) {
         std::wstring cmdCopy = cmd;
         if (CreateProcessW(NULL, cmdCopy.data(), NULL, NULL, FALSE, 
                            CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-            WaitForSingleObject(pi.hProcess, 3500);
+            WaitForSingleObject(pi.hProcess, 4000);
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
         }
@@ -25,10 +50,12 @@ bool LenovoWmi::SetThermalMode(ThermalMode mode) {
     s_thermalMode = mode;
     int val = static_cast<int>(mode);
 
-    std::wstring body = L"$i = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
-                        L"if ($i) { Invoke-CimMethod -InputObject $i -MethodName SetSmartFanMode -Arguments @{Data = [uint32]" + 
-                        std::to_wstring(val) + L"} }";
-    ExecuteSilentWmi(body);
+    std::wstring script = L"$i = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
+                         L"if ($i) { Invoke-CimMethod -InputObject $i -MethodName SetSmartFanMode -Arguments @{Data = [uint32]" + 
+                         std::to_wstring(val) + L"} -ErrorAction SilentlyContinue }";
+
+    ExecuteSilentWmi(script);
+    Logger::Info(L"LenovoWmi", L"SetThermalMode sent: " + ThermalToString(mode));
     return true;
 }
 
@@ -40,10 +67,12 @@ bool LenovoWmi::SetMuxMode(GpuMuxMode mode) {
     s_muxMode = mode;
     int val = static_cast<int>(mode);
 
-    std::wstring body = L"$i = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
-                        L"if ($i) { Invoke-CimMethod -InputObject $i -MethodName SetIGPUModeStatus -Arguments @{mode = [uint32]" + 
-                        std::to_wstring(val) + L"} }";
-    ExecuteSilentWmi(body);
+    std::wstring script = L"$i = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
+                         L"if ($i) { Invoke-CimMethod -InputObject $i -MethodName SetIGPUModeStatus -Arguments @{mode = [uint32]" + 
+                         std::to_wstring(val) + L"; Data = [uint32]0} -ErrorAction SilentlyContinue }";
+
+    ExecuteSilentWmi(script);
+    Logger::Info(L"LenovoWmi", L"SetMuxMode sent: " + MuxToString(mode) + L" (Requires restart to apply)");
     return true;
 }
 
@@ -55,10 +84,16 @@ bool LenovoWmi::SetKeyboardLight(KbdBacklight light) {
     s_kbdLight = light;
     int val = static_cast<int>(light);
 
-    std::wstring body = L"$i = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
-                        L"if ($i) { Invoke-CimMethod -InputObject $i -MethodName SetKeyboardLight -Arguments @{Data = [uint32]" + 
-                        std::to_wstring(val) + L"} }";
-    ExecuteSilentWmi(body);
+    // Try both LENOVO_GAMEZONE_DATA and LENOVO_LIGHTING_METHOD to support all LOQ/Legion firmware
+    std::wstring script = L"$g = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
+                         L"if ($g) { Invoke-CimMethod -InputObject $g -MethodName SetKeyboardLight -Arguments @{Data = [uint32]" + 
+                         std::to_wstring(val) + L"} -ErrorAction SilentlyContinue }; "
+                         L"$l = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_LIGHTING_METHOD -ErrorAction SilentlyContinue; "
+                         L"if ($l) { Invoke-CimMethod -InputObject $l -MethodName Set_Lighting_Current_Status -Arguments @{Lighting_ID = [byte]1; Current_Brightness_Level = [byte]" +
+                         std::to_wstring(val) + L"; Current_State_Type = [byte]1} -ErrorAction SilentlyContinue }";
+
+    ExecuteSilentWmi(script);
+    Logger::Info(L"LenovoWmi", L"SetKeyboardLight sent: " + KbdToString(light));
     return true;
 }
 

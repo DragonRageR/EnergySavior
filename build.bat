@@ -4,7 +4,7 @@ echo ======================================================================
 echo  EnergyControl: Building Native High-Performance Multi-threaded GUI
 echo ======================================================================
 
-g++ -O2 -std=c++20 main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -mwindows -o EnergyControl.exe
+g++ -O2 -std=c++20 main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -lcrypt32 -mwindows -o EnergyControl.exe
 
 if errorlevel 1 goto :FAILED
 
