@@ -8,6 +8,7 @@
 #include "include/core/SystemInfo.hpp"
 #include "include/core/AppConfig.hpp"
 #include "include/core/Logger.hpp"
+#include "include/core/CrashHandler.hpp"
 #include "include/core/TelemetryThread.hpp"
 #include "include/gui/GuiWindow.hpp"
 #include "include/gui/TrayManager.hpp"
@@ -134,9 +135,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     Logger::Init();
-    Logger::Info(L"App", L"EnergyControl process initialized");
+    CrashHandler::Init();
+    Logger::Info(L"App", L"EnergyControl process initialized — Version: " + AppConfig::GetAppVersion() + L" (" + AppConfig::GetAppStage() + L")");
 
     std::string cmdLine(lpCmdLine);
+
+    if (cmdLine.find("--test-crash") != std::string::npos) {
+        CrashHandler::TriggerSyntheticCrash();
+        return 0;
+    }
 
     if (cmdLine.find("--install-autostart") != std::string::npos) {
         bool ok = AppConfig::SetAutoStartEnabled(true);

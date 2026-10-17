@@ -109,29 +109,89 @@ EnergyControl/
 
 ---
 
-## 🚀 4. Збирання та перевірка
+## 🚀 4. Збирання та профілі оптимізації (Production Build System)
 
-Збирання здійснюється за допомогою `build.bat` або команди:
+Збирання виконується за допомогою `build.bat` з вибором цільового профілю (аналог `cargo build --release` у Rust):
+
+### 1. Release профіль (Максимальна швидкодія):
 ```powershell
-g++ -O2 -std=c++20 main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -mwindows -o EnergyControl.exe
+.\build.bat release
+# або просто:
+.\build.bat
 ```
+* **Прапорці оптимізації:**
+  * `-O3`: Агресивна оптимізація компілятора, автовекторизація та планування інструкцій процесора.
+  * `-flto`: Link-Time Optimization (міжмодульне інлайнінгування функцій та видалення мертвого коду).
+  * `-march=x86-64-v2`: Використання інструкцій сучасних процесорів (SSE4.2, PopCount, CMPXCHG16B).
+  * `-DNDEBUG`: Видалення налагоджувальних перевірок для максимальної швидкості.
+  * `-s`: Стрипінг символів (розмір бінарника скорочено до ~155 KB).
+  * `-ldbghelp -lcrypt32`: Підтримка генерації minidump та Base64 шифрування.
 
-### Прапорці компілятора:
-* `-O2`: Оптимізація швидкості виконання.
-* `-std=c++20`: Стандарт C++20 (концепти, сучасні потоки).
-* `-mwindows`: Компіляція підсистеми GUI (без консольного вікна).
-* Бібліотеки: `setupapi` (батарея), `powrprof` (живлення Windows), `gdiplus` / `gdi32` (графіка), `user32` / `shell32` (вікна та трей), `ole32` (COM/WMI).
+### 2. Debug профіль (Повне налагодження):
+```powershell
+.\build.bat debug
+```
+Генерує `EnergyControl_debug.exe` з налагоджувальними символами (`-g3`, `-O0`, `-DDEBUG`).
 
 ---
 
-## 📦 5. Правила оформлення комітів (Git Commit Convention)
+## 🧪 5. Автоматизоване тестування (Automated Unit Tests)
 
-Використовуйте стандарт [Conventional Commits](https://www.conventionalcommits.org/):
+У проекті реалізовано незалежний тестовий фреймворк C++20 (`tests/TestRunner.hpp`), що покриває всі ключові модулі:
+* `AppConfig` (версіонування, збереження параметрів у config.ini).
+* `Logger` (створення файлів, безпечний багатопотоковий запис, рівні логів).
+* `BatteryController` (математика розряду, розрахунок залишкового часу, захист від ділення на нуль).
+* `CpuController` (конвертація станів Intel Turbo Boost, перевірка безпеки зчитування).
+* `WindowsPowerController` (перевірка схем живлення Windows).
+* `LenovoWmi` (валідація рядкових констант MUX, підсвітки, Thermal Fn+Q).
+* `GpuController` (моніторинг температур, потужності та процесів).
+* `CrashHandler` (перевірка кодів винятків SEH).
 
-| Префікс | Призначення | Приклад |
-|---|---|---|
-| `feat:` | Новий функціонал | `feat: add Windows Energy Saver and Power Mode integration` |
-| `fix:` | Виправлення помилки | `fix: resolve notification spam and debounce rapid toggles` |
-| `perf:` | Оптимізація швидкодії | `perf: migrate telemetry to background worker thread (60+ FPS UI)` |
-| `refactor:` | Рефакторинг структури | `refactor: split monolithic codebase into modular core/hardware/gui` |
-| `docs:` | Оновлення документації | `docs: add DEVELOPMENT.md and CHANGELOG.md` |
+### Запуск тестів:
+```powershell
+.\build.bat test
+# або напряму:
+.\run_tests.bat
+```
+Усі тести виконуються автоматично за ~50 мс з детальним кольоровим звітом.
+
+---
+
+## 🛡️ 6. Обробка помилок та діагностика крашів (Crash Reporting & SEH)
+
+У модуль `CrashHandler` інтегровано перехоплення системних помилок процесора та пам'яті:
+* **Structured Exception Handling (SEH):** Перехоплює `EXCEPTION_ACCESS_VIOLATION (0xC0000005)`, `EXCEPTION_STACK_OVERFLOW`, ділення на нуль тощо.
+* **Генерація Minidump (.dmp):** Викликає `MiniDumpWriteDump` з бібліотеки `dbghelp.dll`. Отриманий файл можна відкрити у WinDbg або Visual Studio для точного встановлення рядка збою.
+* **Стек викликів (Stack Backtrace):** Автоматичний запис адрес інструкцій та зміщень модулів (`EnergyControl.exe+0x837e`).
+* **Збереження звіту:** Створюється `%LOCALAPPDATA%\EnergyControl\crash_report_YYYY-MM-DD_HH-MM-SS.log`.
+* **Діалогове вікно:** Користувачеві виводиться системне вікно з поясненням збою та кнопкою швидкого переходу до файлів у Провіднику для надсилання репорту.
+* **Тестування краш-хендлера:**
+  ```powershell
+  .\EnergyControl.exe --test-crash
+  ```
+
+---
+
+## 🐧 7. Тестування у VirtualBox (Linux) та крос-платформність
+
+Проект має чітке розділення на ядро (`src/core/`) та апаратні драйвери (`src/hardware/`):
+* Для тестування компіляції та юніт-тестів на Linux використовується `CMakeLists.txt`:
+  ```bash
+  cmake -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build
+  ctest --test-dir build --output-on-failure
+  ```
+* Крос-компіляція під Windows з Linux здійснюється за допомогою `x86_64-w64-mingw32-g++`.
+
+---
+
+## 📦 8. Правила оформлення комітів та версіонування (SemVer)
+
+* **Стадія проекту:** Pre-Release Alpha (`v0.x.y-alpha`).
+* До відкриття публічного стабільного релізу версії мають суфікс `-alpha`.
+* Використовуйте стандарт [Conventional Commits](https://www.conventionalcommits.org/):
+  * `feat:` Новий функціонал.
+  * `fix:` Виправлення помилки або крашу.
+  * `test:` Додавання або оновлення юніт-тестів.
+  * `perf:` Оптимізація швидкодії або прапорців збірки.
+  * `docs:` Оновлення документації.

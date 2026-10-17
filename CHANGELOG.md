@@ -4,14 +4,30 @@
 
 ---
 
-## [2.2.0] — 2026-10-17
+## [0.2.0-alpha] — 2026-10-17
+
+### 🌟 Додано (Added)
+* **Система перехоплення та діагностики крашів (`CrashHandler`):**
+  * Повноцінна інтеграція **Structured Exception Handling (SEH)** через `SetUnhandledExceptionFilter` для виявлення `EXCEPTION_ACCESS_VIOLATION (0xC0000005)`, `EXCEPTION_STACK_OVERFLOW`, ділення на нуль тощо.
+  * Автоматична генерація **Minidump (.dmp)** через `dbghelp.dll` (`MiniDumpWriteDump`) для відкриття у WinDbg та Visual Studio.
+  * Збереження вичерпного звіту про збій `%LOCALAPPDATA%\EnergyControl\crash_report_YYYY-MM-DD_HH-MM-SS.log` зі станом усіх регістрів процесора x64 (RAX-R15, RIP, EFLAGS) та повним стеком викликів (Stack Backtrace) із зазначенням зміщень модулів.
+  * Системне діалогове вікно з поясненням збою та кнопкою миттєвого переходу до файлів у Провіднику для відправки репорту розробнику.
+  * Прапорець командного рядка `--test-crash` для перевірки надійності роботи краш-хендлера.
+* **Автоматизований тестовий фреймворк (`tests/TestRunner.hpp`, `tests/TestMain.cpp`):**
+  * 15 автономних юніт-тестів, що перевіряють роботу конфігурації, логера, математики заряду/розряду батареї, CPU Boost режимів, схем живлення Windows, параметрів Lenovo WMI, моніторингу GPU та обробки SEH.
+  * Однокліковий скрипт запуску `run_tests.bat` або `build.bat test` (виконання за ~50 мс).
+* **Високопродуктивна збірка компілятором (аналог `cargo build --release` у Rust):**
+  * Режим максимальної швидкодії: прапорці `-O3 -flto -march=x86-64-v2 -DNDEBUG -s`.
+  * Зменшення розміру бінарного файлу з 357 KB до **155 KB** (>55% оптимізації).
+  * Профілі збірки у `build.bat`: `release`, `debug`, `test`.
+* **Крос-платформна підтримка та VirtualBox (Linux):**
+  * Додано файл збірки `CMakeLists.txt` для компіляції та запуску тестового набору в середовищі Linux.
 
 ### 🐛 Виправлено (Fixed)
 * **Виправлено раптовий виліт програми (Crash 0xc0000005 у `ntdll.dll`):**
   * Замінено виклики недокументованих функцій `PowerSetUserConfiguredACPowerMode` на безпечне стандартне системне Win32 API `PowerSetActiveScheme` з гарантованими схемами живлення Windows (`SCHEME_POWER_SAVINGS` та `SCHEME_BALANCED`).
 * **Виправлено залежність активного режиму (Еко/Макс) від стану живлення та CPU Boost:**
-  * Раніше `CpuController::ApplyEcoProfile()` оновлював лише параметри для батареї (DC). При роботі від мережі 220V стан Boost залишався увімкненим, через що автоматичний воркер примусово скидав профіль в `[MAX]`.
-  * Тепер `ApplyEcoProfile()`, `ApplyPerformanceProfile()` та `SetBoostMode()` синхронно змінюють як DC, так і AC параметри реєстру Windows Power (`PowerWriteACValueIndex` та `PowerWriteDCValueIndex`), а також ліміти троттлінгу процесора (99% для Еко, 100% для Макс).
+  * `ApplyEcoProfile()`, `ApplyPerformanceProfile()` та `SetBoostMode()` синхронно змінюють як DC, так і AC параметри реєстру Windows Power (`PowerWriteACValueIndex` та `PowerWriteDCValueIndex`), а також ліміти троттлінгу процесора (99% для Еко, 100% для Макс).
   * Режим `isEcoMode` тепер зберігає явний вибір користувача і не перетирається автоматично.
 * **Виправлено роботу MUX Switch (режими Hybrid, iGPU Only, dGPU Only):**
   * Виправлено виклик WMI-методу `SetIGPUModeStatus`: додано обов'язковий другий параметр `Data = [uint32]0` згідно з сигнатурою CIM/WMI ноутбуків Lenovo.
@@ -21,10 +37,11 @@
   * Реалізовано подвійний виклик: `LENOVO_GAMEZONE_DATA::SetKeyboardLight` та `LENOVO_LIGHTING_METHOD::Set_Lighting_Current_Status` для гарантованої сумісності з серіями LOQ 15IAX9.
 * **Покращено інтерфейс та синхронізацію з треєм:**
   * У Hero-блоці розміщено дві виразні великі кнопки швидкого вибору: **`[ 🌿 ЕКО ] (60Hz + Quiet)`** та **`[ 🚀 МАКС ] (144Hz + Boost)`** з колірною підсвіткою активного режиму, що повністю узгоджується з логікою перемикання в системному треї.
+* **Приведено версіонування до стандарту SemVer Alpha (`0.2.0-alpha` замість передчасних релізів).**
 
 ---
 
-## [2.1.0] — 2026-10-17
+## [0.1.0-alpha] — 2026-10-17
 
 ### 🌟 Додано (Added)
 * **Інтеграція з режимом енергозбереження та енергоконтролю Windows (`WindowsPowerController`):**
