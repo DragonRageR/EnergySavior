@@ -1,0 +1,20 @@
+# Binaries and object files
+*.exe
+*.o
+*.obj
+*.res
+
+# Logs and runtime data
+*.log
+*.old
+*.tmp
+
+# IDE and Editor artifacts
+.vscode/
+.idea/
+*.suo
+*.user
+*.pdb
+
+# Local config cache
+config.ini
