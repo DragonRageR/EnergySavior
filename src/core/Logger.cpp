@@ -30,11 +30,11 @@ void Logger::Init() {
 
     wchar_t appData[MAX_PATH] = { 0 };
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appData))) {
-        std::wstring dir = std::wstring(appData) + L"\\EnergyControl";
+        std::wstring dir = std::wstring(appData) + L"\\EnergySavior";
         CreateDirectoryW(dir.c_str(), NULL);
-        s_logFilePath = dir + L"\\energy_control.log";
+        s_logFilePath = dir + L"\\energy_savior.log";
     } else {
-        s_logFilePath = L"energy_control.log";
+        s_logFilePath = L"energy_savior.log";
     }
 
     s_initialized = true;

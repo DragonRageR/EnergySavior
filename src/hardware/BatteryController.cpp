@@ -1,4 +1,4 @@
-#include "../../include/hardware/BatteryController.hpp"
+﻿#include "../../include/hardware/BatteryController.hpp"
 #include <batclass.h>
 #include <setupapi.h>
 #include <vector>
@@ -75,7 +75,10 @@ BatterySnapshot BatteryController::Query() {
             info.isCharging = (bs.PowerState & BATTERY_CHARGING) != 0;
 
             if (bs.Rate != 0 && (long)bs.Rate != (long)BATTERY_UNKNOWN_RATE) {
-                info.dischargeRateMW = std::abs((long)bs.Rate);
+                long rate = std::abs((long)bs.Rate);
+                if (rate < 150000) { // Filter out sensor glitches/overflows (>150W on laptop battery)
+                    info.dischargeRateMW = rate;
+                }
             }
 
             if (info.isDischarging && info.dischargeRateMW > 0 && info.currentCapacityMWh > 0) {

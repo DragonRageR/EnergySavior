@@ -66,7 +66,7 @@ inline int RunAll() {
 
     SetConsoleColor(11); // Cyan
     std::cout << "\n======================================================================\n";
-    std::cout << "          LENOVO ENERGYCONTROL — AUTOMATED TEST SUITE                 \n";
+    std::cout << "                  ENERGYSAVIOR — AUTOMATED TEST SUITE                 \n";
     std::cout << "======================================================================\n\n";
     SetConsoleColor(15);
 
@@ -107,7 +107,7 @@ inline int RunAll() {
             SetConsoleColor(8);
             std::cout << " (" << elapsedMs << " ms)\n";
             SetConsoleColor(12);
-            std::cout << "   └──> " << failMsg << "\n";
+            std::cout << "   |---> " << failMsg << "\n";
             SetConsoleColor(15);
             failed++;
         }

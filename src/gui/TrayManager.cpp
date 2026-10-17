@@ -67,7 +67,7 @@ void TrayManager::Init(HWND hWnd) {
     s_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     s_nid.uCallbackMessage = WM_TRAYICON;
     s_nid.hIcon = s_hIconPerf;
-    wcscpy_s(s_nid.szTip, L"EnergyControl (ЛКМ - перемикання режиму, ПКМ - меню)");
+    wcscpy_s(s_nid.szTip, L"EnergySavior (ЛКМ - перемикання режиму, ПКМ - меню)");
 
     Shell_NotifyIconW(NIM_ADD, &s_nid);
 }
@@ -76,9 +76,9 @@ void TrayManager::UpdateIcon(bool isEco) {
     s_nid.hIcon = isEco ? s_hIconEco : s_hIconPerf;
     s_nid.uFlags = NIF_ICON | NIF_TIP;
     if (isEco) {
-        wcscpy_s(s_nid.szTip, L"EnergyControl: РЕЖИМ ЕНЕРГОЗБЕРЕЖЕННЯ (60Hz, Boost OFF)");
+        wcscpy_s(s_nid.szTip, L"EnergySavior: РЕЖИМ ЕНЕРГОЗБЕРЕЖЕННЯ (60Hz, Boost OFF)");
     } else {
-        wcscpy_s(s_nid.szTip, L"EnergyControl: РЕЖИМ ПРОДУКТИВНОСТІ (144Hz, Boost ON)");
+        wcscpy_s(s_nid.szTip, L"EnergySavior: РЕЖИМ ПРОДУКТИВНОСТІ (144Hz, Boost ON)");
     }
     Shell_NotifyIconW(NIM_MODIFY, &s_nid);
 }
@@ -93,7 +93,7 @@ void TrayManager::ShowContextMenu() {
     GetCursorPos(&pt);
 
     HMENU hMenu = CreatePopupMenu();
-    AppendMenuW(hMenu, MF_STRING, ID_TRAY_OPEN, L"Відкрити панель EnergyControl");
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_OPEN, L"Відкрити панель EnergySavior");
     SetMenuDefaultItem(hMenu, ID_TRAY_OPEN, FALSE);
     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
 
@@ -109,7 +109,7 @@ void TrayManager::ShowContextMenu() {
     AppendMenuW(hMenu, MF_STRING | (autoStart ? MF_CHECKED : MF_UNCHECKED), ID_TRAY_AUTOSTART, L"Автозапуск з Windows (Адміністратор)");
 
     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hMenu, MF_STRING, ID_TRAY_CHECK_UPDATE, L"[🔄] Перевірити оновлення...");
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_CHECK_UPDATE, L"[~] Перевірити оновлення...");
     AppendMenuW(hMenu, MF_STRING, ID_TRAY_OPEN_LOG, L"[!] Відкрити журнал подій (Лог)");
     AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"Вийти з програми");
 

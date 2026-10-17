@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <string>
 #include <vector>
@@ -23,4 +23,5 @@ public:
     static GpuSnapshot Query();
     static bool TerminateProcessByPid(DWORD pid);
     static void TerminateAllRogueProcesses();
+    static void Shutdown(); // Call once on app exit to release NVML
 };

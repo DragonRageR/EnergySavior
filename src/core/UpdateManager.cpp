@@ -75,7 +75,7 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
     std::wstring downloadUrl = L"";
 
     // Use WinHTTP to query GitHub API or raw version manifest
-    HINTERNET hSession = WinHttpOpen(L"LenovoEnergyControl-Updater/1.0",
+    HINTERNET hSession = WinHttpOpen(L"EnergySavior-Updater/1.0",
                                      WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);
@@ -88,7 +88,7 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
                                             INTERNET_DEFAULT_HTTPS_PORT, 0);
         if (hConnect) {
             HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET",
-                                                    L"/Yaroslav-hub/EnergyControl/master/version.json",
+                                                    L"/Yaroslav-hub/EnergySavior/master/version.json",
                                                     NULL, WINHTTP_NO_REFERER,
                                                     WINHTTP_DEFAULT_ACCEPT_TYPES,
                                                     WINHTTP_FLAG_SECURE);
@@ -144,8 +144,8 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
         // Fallback / Standalone mode: repository is up-to-date with current build
         remoteVer = AppConfig::GetAppVersion();
         s_status = UpdateStatus::UpToDate;
-        s_statusMessage = L"[✓] Встановлено останню версію (" + AppConfig::GetAppVersion() + L")";
-        Logger::Info(L"UpdateManager", L"No new updates found. Running latest: " + AppConfig::GetAppVersion());
+        s_statusMessage = L"[OK] Встановлено останню версію (" + AppConfig::GetAppVersion() + L")";
+        Logger::Info(L"UpdateManager", L"Оновлень не знайдено. Встановлено актуальну версію: " + AppConfig::GetAppVersion());
     } else {
         if (IsNewerVersion(AppConfig::GetAppVersion(), remoteVer)) {
             s_status = UpdateStatus::UpdateAvailable;
@@ -153,13 +153,13 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
             s_info.downloadUrl = downloadUrl;
             s_info.releaseNotes = releaseNotes;
             s_statusMessage = L"[!] Доступне оновлення: " + remoteVer;
-            Logger::Info(L"UpdateManager", L"New version available: " + remoteVer);
-            TrayManager::ShowBalloon(L"Доступне оновлення EnergyControl!",
+            Logger::Info(L"UpdateManager", L"Виявлено нову версію: " + remoteVer);
+            TrayManager::ShowBalloon(L"Доступне оновлення EnergySavior!", 
                                      (L"Вийшла нова версія: " + remoteVer + L". Натисніть для оновлення.").c_str());
         } else {
             s_status = UpdateStatus::UpToDate;
-            s_statusMessage = L"[✓] Остання версія (" + AppConfig::GetAppVersion() + L")";
-            Logger::Info(L"UpdateManager", L"Application is up to date: " + AppConfig::GetAppVersion());
+            s_statusMessage = L"[OK] Остання версія (" + AppConfig::GetAppVersion() + L")";
+            Logger::Info(L"UpdateManager", L"Встановлено найновішу версію: " + AppConfig::GetAppVersion());
         }
     }
 
@@ -190,10 +190,10 @@ void UpdateManager::WorkerDownload(std::function<void(bool, const std::wstring&)
     wchar_t appData[MAX_PATH] = { 0 };
     std::wstring updateDir = L".";
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appData))) {
-        updateDir = std::wstring(appData) + L"\\EnergyControl\\updates";
+        updateDir = std::wstring(appData) + L"\\EnergySavior\\updates";
         CreateDirectoryW(updateDir.c_str(), NULL);
     }
-    std::wstring updateExe = updateDir + L"\\EnergyControl_update.exe";
+    std::wstring updateExe = updateDir + L"\\EnergySavior_update.exe";
 
     // Download using WinHTTP or URLDownloadToFile
     URLDownloadToFileW(NULL, s_info.downloadUrl.c_str(), updateExe.c_str(), 0, NULL);
@@ -229,7 +229,7 @@ bool UpdateManager::PerformSelfUpdateAndRestart(const std::wstring& updateFilePa
     wchar_t appData[MAX_PATH] = { 0 };
     std::wstring updateDir = L".";
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appData))) {
-        updateDir = std::wstring(appData) + L"\\EnergyControl\\updates";
+        updateDir = std::wstring(appData) + L"\\EnergySavior\\updates";
     }
     std::wstring batPath = updateDir + L"\\apply_update.bat";
 
@@ -254,6 +254,11 @@ bool UpdateManager::PerformSelfUpdateAndRestart(const std::wstring& updateFilePa
     ss << "@echo off\n";
     ss << "timeout /t 1 /nobreak >nul\n";
     ss << ":WAIT_PROCESS\n";
+    ss << "tasklist | find /i \"EnergySavior.exe\" >nul\n";
+    ss << "if not errorlevel 1 (\n";
+    ss << "    timeout /t 1 /nobreak >nul\n";
+    ss << "    goto :WAIT_PROCESS\n";
+    ss << ")\n";
     ss << "tasklist | find /i \"EnergyControl.exe\" >nul\n";
     ss << "if not errorlevel 1 (\n";
     ss << "    timeout /t 1 /nobreak >nul\n";
@@ -296,12 +301,13 @@ std::wstring UpdateManager::GetStatusMessage() {
 
 std::wstring UpdateManager::GetStatusDisplayString() {
     switch (s_status.load()) {
-        case UpdateStatus::Checking:        return L"[⏳] Перевірка...";
-        case UpdateStatus::UpdateAvailable: return L"[🚀] Доступно оновлення!";
-        case UpdateStatus::Downloading:     return L"[⬇️] Завантаження...";
-        case UpdateStatus::ReadyToRestart:  return L"[⚡] Перезапустити";
-        case UpdateStatus::Failed:          return L"[!] Помилка зв'язку";
+        case UpdateStatus::Checking:        return L"[~] Перевірка...";
+        case UpdateStatus::UpdateAvailable: return L"[+] Доступно оновлення!";
+        case UpdateStatus::Downloading:     return L"[>] Завантаження...";
+        case UpdateStatus::ReadyToRestart:  return L"[!] Перезапустити";
+        case UpdateStatus::Failed:          return L"[X] Помилка зв'язку";
         case UpdateStatus::UpToDate:
-        default:                            return L"[✓] " + AppConfig::GetAppVersion();
+        default:                            return L"[OK] " + AppConfig::GetAppVersion();
     }
 }
+

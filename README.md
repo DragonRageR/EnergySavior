@@ -1,4 +1,4 @@
-# EnergyControl ⚡ (Native High-Performance GUI & Tray Agent)
+# EnergySavior ⚡ (Native High-Performance GUI & Tray Agent)
 
 Універсальна високоефективна нативна Windows C++20 програма для глибокого керування енергоспоживанням, автономністю та апаратними режимами ноутбука (динамічно виявляє конфігурацію: процесор, відеокарту, екран, BIOS, MUX Switch, підсвітку та датчики).
 
@@ -36,7 +36,7 @@
 ## 📁 Структура проекту
 
 ```
-EnergyControl/
+EnergySavior/
 ├── include/
 │   ├── core/
 │   │   ├── AppConfig.hpp          # Налаштування, автозапуск, UAC перевірка
@@ -59,7 +59,7 @@ EnergyControl/
 │   ├── app.manifest              # UAC elevation & PerMonitorV2 DPI
 │   ├── app.rc                    # Ресурсний файл
 │   └── app.res                   # Зкомпільовані ресурси
-├── EnergyControl.exe.manifest    # Маніфест для Windows Activation Context
+├── EnergySavior.exe.manifest     # Маніфест для Windows Activation Context
 ├── main.cpp                      # WinMain, черга повідомлень, безшовна ініціалізація
 ├── build.bat                     # Скрипт компіляції (GCC C++20)
 ├── install_autostart.bat         # Налаштування автозапуску
@@ -72,5 +72,5 @@ EnergyControl/
 
 Для збирання запустіть `build.bat` або виконайте:
 ```powershell
-g++ -O2 -std=c++20 main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -mwindows -o EnergyControl.exe
+cmd /c "build.bat release"
 ```

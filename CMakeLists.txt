@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(EnergyControl VERSION 0.2.0 LANGUAGES CXX)
+project(EnergySavior VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,15 +22,15 @@ file(GLOB_RECURSE CORE_SOURCES
 # Main Application Target (Windows GUI)
 if(WIN32)
     file(GLOB_RECURSE GUI_SOURCES "src/gui/*.cpp")
-    add_executable(EnergyControl WIN32
+    add_executable(EnergySavior WIN32
         main.cpp
         ${CORE_SOURCES}
         ${GUI_SOURCES}
     )
 
-    target_include_directories(EnergyControl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_include_directories(EnergySavior PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-    target_link_libraries(EnergyControl PRIVATE
+    target_link_libraries(EnergySavior PRIVATE
         setupapi
         powrprof
         gdiplus
@@ -46,16 +46,16 @@ if(WIN32)
 endif()
 
 # Automated Unit Tests Target
-add_executable(EnergyControl_Tests
+add_executable(EnergySavior_Tests
     tests/TestMain.cpp
     ${CORE_SOURCES}
     $<$<BOOL:${WIN32}>:src/gui/TrayManager.cpp>
 )
 
-target_include_directories(EnergyControl_Tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+target_include_directories(EnergySavior_Tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
 if(WIN32)
-    target_link_libraries(EnergyControl_Tests PRIVATE
+    target_link_libraries(EnergySavior_Tests PRIVATE
         setupapi
         powrprof
         gdiplus
@@ -71,4 +71,4 @@ if(WIN32)
 endif()
 
 enable_testing()
-add_test(NAME UnitTests COMMAND EnergyControl_Tests)
+add_test(NAME UnitTests COMMAND EnergySavior_Tests)

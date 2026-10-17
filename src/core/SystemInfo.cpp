@@ -1,5 +1,8 @@
 #include "../../include/core/SystemInfo.hpp"
 #include <algorithm>
+#include <tlhelp32.h>
+#include <psapi.h>
+
 
 std::wstring SystemInfo::ReadRegistryString(HKEY root, const wchar_t* subKey, const wchar_t* valName) {
     HKEY hKey;
@@ -48,3 +51,40 @@ SystemDetails SystemInfo::Detect() {
 
     return det;
 }
+
+std::vector<TopProcessInfo> SystemInfo::GetTopMemoryProcesses(size_t maxCount) {
+    std::vector<TopProcessInfo> list;
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap == INVALID_HANDLE_VALUE) return list;
+
+    PROCESSENTRY32W pe;
+    pe.dwSize = sizeof(pe);
+    if (Process32FirstW(hSnap, &pe)) {
+        do {
+            if (pe.th32ProcessID <= 4) continue;
+            HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
+            if (hProc) {
+                PROCESS_MEMORY_COUNTERS pmc = { 0 };
+                if (GetProcessMemoryInfo(hProc, &pmc, sizeof(pmc))) {
+                    TopProcessInfo info;
+                    info.pid = pe.th32ProcessID;
+                    info.name = pe.szExeFile;
+                    info.memMB = pmc.WorkingSetSize / (1024 * 1024);
+                    list.push_back(info);
+                }
+                CloseHandle(hProc);
+            }
+        } while (Process32NextW(hSnap, &pe));
+    }
+    CloseHandle(hSnap);
+
+    std::sort(list.begin(), list.end(), [](const TopProcessInfo& a, const TopProcessInfo& b) {
+        return a.memMB > b.memMB;
+    });
+
+    if (list.size() > maxCount) {
+        list.resize(maxCount);
+    }
+    return list;
+}
+

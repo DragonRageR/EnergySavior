@@ -1,0 +1,297 @@
+﻿#include "../../include/hardware/GpuController.hpp"
+#include "../../include/core/Logger.hpp"
+#include <iostream>
+#include <tlhelp32.h>
+#include <unordered_map>
+#include <algorithm>
+#include <vector>
+
+typedef int (*nvmlInit_t)();
+typedef int (*nvmlShutdown_t)();
+typedef int (*nvmlDeviceGetHandleByIndex_t)(unsigned int, void**);
+typedef int (*nvmlDeviceGetName_t)(void*, char*, unsigned int);
+typedef int (*nvmlDeviceGetPowerUsage_t)(void*, unsigned int*);
+typedef int (*nvmlDeviceGetTemperature_t)(void*, int, unsigned int*);
+
+struct nvmlProcessInfo_raw {
+    unsigned int pid;
+    unsigned long long usedGpuMemory;
+};
+
+typedef int (*nvmlDeviceGetGraphicsRunningProcesses_t)(void*, unsigned int*, nvmlProcessInfo_raw*);
+typedef int (*nvmlDeviceGetComputeRunningProcesses_t)(void*, unsigned int*, nvmlProcessInfo_raw*);
+
+static std::wstring GetProcessName(DWORD pid) {
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProcess) return L"PID " + std::to_wstring(pid);
+
+    wchar_t buffer[MAX_PATH] = { 0 };
+    DWORD size = MAX_PATH;
+    if (QueryFullProcessImageNameW(hProcess, 0, buffer, &size)) {
+        CloseHandle(hProcess);
+        std::wstring fullPath(buffer);
+        size_t slash = fullPath.find_last_of(L"\\/");
+        if (slash != std::wstring::npos) {
+            return fullPath.substr(slash + 1);
+        }
+        return fullPath;
+    }
+    CloseHandle(hProcess);
+    return L"PID " + std::to_wstring(pid);
+}
+
+GpuSnapshot GpuController::Query() {
+    GpuSnapshot snap;
+
+    HMODULE hNvml = LoadLibraryA("nvml.dll");
+    if (!hNvml) return snap;
+
+    nvmlInit_t nvmlInit = (nvmlInit_t)GetProcAddress(hNvml, "nvmlInit_v2");
+    nvmlShutdown_t nvmlShutdown = (nvmlShutdown_t)GetProcAddress(hNvml, "nvmlShutdown");
+    nvmlDeviceGetHandleByIndex_t getDevice = (nvmlDeviceGetHandleByIndex_t)GetProcAddress(hNvml, "nvmlDeviceGetHandleByIndex_v2");
+    nvmlDeviceGetName_t getName = (nvmlDeviceGetName_t)GetProcAddress(hNvml, "nvmlDeviceGetName");
+    nvmlDeviceGetPowerUsage_t getPower = (nvmlDeviceGetPowerUsage_t)GetProcAddress(hNvml, "nvmlDeviceGetPowerUsage");
+    nvmlDeviceGetTemperature_t getTemp = (nvmlDeviceGetTemperature_t)GetProcAddress(hNvml, "nvmlDeviceGetTemperature");
+    nvmlDeviceGetGraphicsRunningProcesses_t getGfx = (nvmlDeviceGetGraphicsRunningProcesses_t)GetProcAddress(hNvml, "nvmlDeviceGetGraphicsRunningProcesses_v3");
+    nvmlDeviceGetComputeRunningProcesses_t getComp = (nvmlDeviceGetComputeRunningProcesses_t)GetProcAddress(hNvml, "nvmlDeviceGetComputeRunningProcesses_v3");
+
+    if (!nvmlInit || nvmlInit() != 0) {
+        FreeLibrary(hNvml);
+        return snap;
+    }
+
+    void* dev = nullptr;
+    if (getDevice && getDevice(0, &dev) == 0) {
+        snap.isAvailable = true;
+
+        char name[64] = { 0 };
+        if (getName && getName(dev, name, sizeof(name)) == 0) {
+            std::string n(name);
+            snap.model = std::wstring(n.begin(), n.end());
+        }
+
+        unsigned int pwr = 0;
+        if (getPower && getPower(dev, &pwr) == 0) {
+            snap.powerWatts = pwr / 1000.0;
+        }
+
+        unsigned int temp = 0;
+        if (getTemp && getTemp(dev, 0, &temp) == 0) {
+            snap.temperatureC = temp;
+        }
+
+        // Query graphics processes
+        unsigned int count = 0;
+        if (getGfx) {
+            getGfx(dev, &count, nullptr);
+            if (count > 0) {
+                std::vector<nvmlProcessInfo_raw> procs(count);
+                if (getGfx(dev, &count, procs.data()) == 0) {
+                    for (unsigned int i = 0; i < count; i++) {
+                        GpuProcess gp;
+                        gp.pid = procs[i].pid;
+                        if (procs[i].usedGpuMemory != (unsigned long long)-1 && procs[i].usedGpuMemory < 64ULL * 1024 * 1024 * 1024) {
+                            gp.memoryMB = procs[i].usedGpuMemory / (1024 * 1024);
+                        }
+                        gp.name = GetProcessName(gp.pid);
+                        snap.processes.push_back(gp);
+                    }
+                }
+            }
+        }
+
+        // Query compute processes
+        unsigned int compCount = 0;
+        if (getComp) {
+            getComp(dev, &compCount, nullptr);
+            if (compCount > 0) {
+                std::vector<nvmlProcessInfo_raw> procs(compCount);
+                if (getComp(dev, &compCount, procs.data()) == 0) {
+                    for (unsigned int i = 0; i < compCount; i++) {
+                        bool exists = false;
+                        for (const auto& p : snap.processes) {
+                            if (p.pid == procs[i].pid) { exists = true; break; }
+                        }
+                        if (!exists) {
+                            GpuProcess gp;
+                            gp.pid = procs[i].pid;
+                            if (procs[i].usedGpuMemory != (unsigned long long)-1 && procs[i].usedGpuMemory < 64ULL * 1024 * 1024 * 1024) {
+                                gp.memoryMB = procs[i].usedGpuMemory / (1024 * 1024);
+                            }
+                            gp.name = GetProcessName(gp.pid);
+                            snap.processes.push_back(gp);
+                        }
+                    }
+                }
+            }
+        }
+
+        snap.isAwake = (snap.powerWatts > 1.5 || !snap.processes.empty());
+    }
+
+    if (nvmlShutdown) nvmlShutdown();
+    FreeLibrary(hNvml);
+    return snap;
+}
+
+static std::wstring ToLowerStr(std::wstring s) {
+    std::transform(s.begin(), s.end(), s.begin(), ::towlower);
+    return s;
+}
+
+static std::wstring GetDirectoryOf(const std::wstring& path) {
+    size_t pos = path.find_last_of(L"\\/");
+    if (pos != std::wstring::npos) return path.substr(0, pos);
+    return L"";
+}
+
+static DWORD FindAppRootPid(DWORD targetPid, std::wstring& outExeName) {
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap == INVALID_HANDLE_VALUE) return targetPid;
+
+    struct ProcItem {
+        DWORD pid;
+        DWORD parentPid;
+        std::wstring name;
+    };
+
+    std::unordered_map<DWORD, ProcItem> procs;
+    PROCESSENTRY32W pe;
+    pe.dwSize = sizeof(pe);
+    if (Process32FirstW(hSnap, &pe)) {
+        do {
+            procs[pe.th32ProcessID] = { pe.th32ProcessID, pe.th32ParentProcessID, pe.szExeFile };
+        } while (Process32NextW(hSnap, &pe));
+    }
+    CloseHandle(hSnap);
+
+    if (procs.find(targetPid) == procs.end()) return targetPid;
+    outExeName = procs[targetPid].name;
+
+    auto getFullPath = [](DWORD pid) -> std::wstring {
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (!h) return L"";
+        wchar_t buf[MAX_PATH] = { 0 };
+        DWORD sz = MAX_PATH;
+        if (QueryFullProcessImageNameW(h, 0, buf, &sz)) {
+            CloseHandle(h);
+            return buf;
+        }
+        CloseHandle(h);
+        return L"";
+    };
+
+    DWORD curr = targetPid;
+    std::wstring targetPath = getFullPath(targetPid);
+    std::wstring targetDir = ToLowerStr(GetDirectoryOf(targetPath));
+
+    auto isSystemShell = [](const std::wstring& name) {
+        std::wstring n = ToLowerStr(name);
+        return (n == L"explorer.exe" || n == L"services.exe" || n == L"svchost.exe" || 
+                n == L"winlogon.exe" || n == L"csrss.exe" || n == L"smss.exe" || 
+                n == L"dwm.exe" || n == L"devenv.exe" || n == L"cmd.exe" || 
+                n == L"powershell.exe" || n == L"windowsterminal.exe" ||
+                n == L"energysavior.exe" || n == L"energycontrol.exe");
+    };
+
+    while (true) {
+        auto it = procs.find(curr);
+        if (it == procs.end()) break;
+
+        DWORD ppid = it->second.parentPid;
+        if (ppid == 0 || ppid == curr) break;
+
+        auto pit = procs.find(ppid);
+        if (pit == procs.end()) break;
+
+        if (isSystemShell(pit->second.name)) break;
+
+        std::wstring parentPath = getFullPath(ppid);
+        std::wstring parentDir = ToLowerStr(GetDirectoryOf(parentPath));
+
+        bool sameName = (ToLowerStr(it->second.name) == ToLowerStr(pit->second.name));
+        bool sameDir = (!targetDir.empty() && !parentDir.empty() && 
+                        (parentDir == targetDir || targetDir.rfind(parentDir, 0) == 0 || parentDir.rfind(targetDir, 0) == 0));
+
+        // РџРµСЂРµРІС–СЂРєР° СЃРїРѕСЂС–РґРЅРµРЅРѕСЃС‚С– РЅР°Р·РІРё РІРёРєРѕРЅСѓРІР°РЅРёС… С„Р°Р№Р»С–РІ РѕРґРЅРѕРіРѕ РїР°РєРµС‚Сѓ (РЅР°РїСЂРёРєР»Р°Рґ: wallpaper64.exe С‚Р° webwallpaper64.exe)
+        std::wstring cName = ToLowerStr(it->second.name);
+        std::wstring pName = ToLowerStr(pit->second.name);
+        bool relatedName = false;
+        if (cName.size() >= 5 && pName.size() >= 5) {
+            if (cName.find(pName.substr(0, 5)) != std::wstring::npos || 
+                pName.find(cName.substr(0, 5)) != std::wstring::npos) {
+                relatedName = true;
+            }
+        }
+
+        if (sameName || sameDir || relatedName) {
+            curr = ppid;
+            outExeName = pit->second.name;
+        } else {
+            break;
+        }
+    }
+
+    return curr;
+}
+
+bool GpuController::TerminateProcessByPid(DWORD pid) {
+    if (pid == 0 || pid == GetCurrentProcessId()) return false;
+
+    std::wstring exeName;
+    DWORD rootPid = FindAppRootPid(pid, exeName);
+
+    Logger::Info(L"Р’С–РґРµРѕРєР°СЂС‚Р°", L"РџСЂРёРјСѓСЃРѕРІРµ Р·Р°РІРµСЂС€РµРЅРЅСЏ РїСЂРѕС†РµСЃСѓ: PID " + std::to_wstring(pid) + 
+                               L" (РљРѕСЂРµРЅРµРІРёР№ Р±Р°С‚СЊРєС–РІСЃСЊРєРёР№ PID: " + std::to_wstring(rootPid) + 
+                               (!exeName.empty() ? (L", " + exeName) : L"") + L")");
+
+    // 1. РџР•Р РЁРРњ Р·Р°РІРµСЂС€СѓС”РјРѕ Р±Р°С‚СЊРєС–РІСЃСЊРєРёР№ РїСЂРѕС†РµСЃ rootPid (С‰РѕР± watchdog РЅРµ Р·РјС–Рі РјРёС‚С‚С”РІРѕ РїРµСЂРµР·Р°РїСѓСЃС‚РёС‚Рё РґРѕС‡С–СЂРЅС–Р№ РїСЂРѕС†РµСЃ!)
+    if (rootPid != pid && rootPid != 0) {
+        HANDLE hRoot = OpenProcess(PROCESS_TERMINATE, FALSE, rootPid);
+        if (hRoot) {
+            TerminateProcess(hRoot, 1);
+            CloseHandle(hRoot);
+        }
+    }
+
+    // 2. Р—Р°РІРµСЂС€СѓС”РјРѕ С†С–Р»СЊРѕРІРёР№ РїСЂРѕС†РµСЃ (pid)
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+    if (hProcess) {
+        TerminateProcess(hProcess, 1);
+        CloseHandle(hProcess);
+    }
+
+    // 3. Р—РЅРёС‰СѓС”РјРѕ РІСЃРµ РґРµСЂРµРІРѕ РїСЂРѕС†РµСЃС–РІ С‡РµСЂРµР· taskkill РґР»СЏ РїРѕРІРЅРѕС— Р·Р°С‡РёСЃС‚РєРё РјРѕР¶Р»РёРІРёС… СЃСѓРїСѓС‚РЅС–С… РІРѕСЂРєРµСЂС–РІ
+    wchar_t cmd[128];
+    swprintf_s(cmd, L"taskkill.exe /F /T /PID %u", rootPid);
+    STARTUPINFOW si = { sizeof(si) };
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi = { 0 };
+    if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, 1000);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+
+    // 4. РЇРєС‰Рѕ rootPid РІС–РґСЂС–Р·РЅСЏРІСЃСЏ, РіР°СЂР°РЅС‚РѕРІР°РЅРѕ Р·Р°С‡РёС‰Р°С”РјРѕ С‚Р°РєРѕР¶ РґРµСЂРµРІРѕ С†С–Р»СЊРѕРІРѕРіРѕ PID
+    if (rootPid != pid) {
+        swprintf_s(cmd, L"taskkill.exe /F /T /PID %u", pid);
+        if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+            WaitForSingleObject(pi.hProcess, 500);
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+        }
+    }
+
+    return true;
+}
+
+void GpuController::TerminateAllRogueProcesses() {
+    GpuSnapshot s = Query();
+    for (const auto& p : s.processes) {
+        TerminateProcessByPid(p.pid);
+    }
+}
+
+

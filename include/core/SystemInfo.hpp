@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <vector>
 
 struct SystemDetails {
     std::wstring manufacturer = L"Generic";
@@ -13,10 +14,17 @@ struct SystemDetails {
     int externalDisplayCount = 0;
 };
 
+struct TopProcessInfo {
+    DWORD pid = 0;
+    std::wstring name;
+    unsigned long long memMB = 0;
+};
+
 class SystemInfo {
 private:
     static std::wstring ReadRegistryString(HKEY root, const wchar_t* subKey, const wchar_t* valName);
 
 public:
     static SystemDetails Detect();
+    static std::vector<TopProcessInfo> GetTopMemoryProcesses(size_t maxCount = 6);
 };

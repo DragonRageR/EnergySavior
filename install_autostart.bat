@@ -10,17 +10,17 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 cd /d "%~dp0"
-title EnergyControl - AutoStart Registration (Administrator)
+title EnergySavior - AutoStart Registration (Administrator)
 
 echo ======================================================================
-echo  EnergyControl: AutoStart Registration (Administrator)
+echo  EnergySavior: AutoStart Registration (Administrator)
 echo ======================================================================
 echo.
 
-set "TARGET=%~dp0EnergyControl.exe"
+set "TARGET=%~dp0EnergySavior.exe"
 
 if not exist "%TARGET%" (
-    echo [ERROR] EnergyControl.exe not found at:
+    echo [ERROR] EnergySavior.exe not found at:
     echo "%TARGET%"
     echo.
     pause
@@ -28,17 +28,22 @@ if not exist "%TARGET%" (
 )
 
 echo 1. Registering in Windows Task Manager Startup (HKCU Run key)...
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "EnergyControl" /t REG_SZ /d "\"%TARGET%\" --minimized" /f >nul
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "EnergySavior" /t REG_SZ /d "\"%TARGET%\" --minimized" /f >nul
+rem Remove legacy keys
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "EnergyControl" /f >nul 2>nul
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "LenovoEnergyControl" /f >nul 2>nul
 
 echo 2. Registering in Windows Task Scheduler (Highest Privileges / On Logon)...
-schtasks /create /tn "LenovoEnergyControl" /tr "\"%TARGET%\" --minimized" /rl HIGHEST /sc ONLOGON /f >nul
+schtasks /create /tn "EnergySavior" /tr "\"%TARGET%\" --minimized" /rl HIGHEST /sc ONLOGON /f >nul
+rem Remove legacy scheduled task
+schtasks /delete /tn "LenovoEnergyControl" /f >nul 2>nul
 
 if %ERRORLEVEL% EQU 0 (
-    powershell -NoProfile -Command "Set-ScheduledTask -TaskName 'LenovoEnergyControl' -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0)" >nul 2>nul
+    powershell -NoProfile -Command "Set-ScheduledTask -TaskName 'EnergySavior' -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0)" >nul 2>nul
 
     echo.
     echo ======================================================================
-    echo  [SUCCESS] EnergyControl successfully registered for Auto-Start
+    echo  [SUCCESS] EnergySavior successfully registered for Auto-Start
     echo ======================================================================
     echo.
     echo  - Appears in Task Manager Startup tab

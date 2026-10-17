@@ -3,10 +3,10 @@
   <assemblyIdentity
     version="2.0.0.0"
     processorArchitecture="*"
-    name="EnergyControl"
+    name="EnergySavior"
     type="win32"
   />
-  <description>Universal Energy and Hardware Control</description>
+  <description>Universal Energy and Hardware Savior</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>

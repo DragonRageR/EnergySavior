@@ -14,6 +14,8 @@
 struct TelemetryData {
     BatterySnapshot battery;
     DWORD refreshRate = 144;
+    int brightness = 50;
+    float displayWatts = 6.0f;
     CpuBoostMode cpuBoost = CpuBoostMode::Aggressive;
     GpuSnapshot gpu;
     ThermalMode thermalMode = ThermalMode::Balance;
@@ -21,6 +23,7 @@ struct TelemetryData {
     KbdBacklight kbdLight = KbdBacklight::Low;
     WindowsPowerStatus winPower;
     SystemDetails system;
+    std::vector<TopProcessInfo> topProcesses;
     bool isEcoMode = false;
     bool isElevated = false;
 };
@@ -30,6 +33,7 @@ private:
     static inline std::atomic<bool> s_running{false};
     static inline std::mutex s_mutex;
     static inline TelemetryData s_data;
+    static inline std::vector<float> s_powerHistory;
     static inline HWND s_notifyHwnd = NULL;
     static inline DWORD s_lastNotificationTime = 0;
     static inline int s_acStateCounter = 0;
@@ -42,6 +46,7 @@ public:
     static void Start(HWND notifyHwnd);
     static void Stop();
     static TelemetryData GetData();
+    static std::vector<float> GetPowerHistory(size_t maxSeconds = 60);
 
     static void ApplyEcoProfile();
     static void ApplyPerformanceProfile();
@@ -55,4 +60,6 @@ public:
 
     static bool CanNotify();
     static void MarkNotificationSent();
+    static void RefreshPowerStatus();
 };
+

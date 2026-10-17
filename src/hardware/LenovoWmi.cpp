@@ -55,7 +55,7 @@ bool LenovoWmi::SetThermalMode(ThermalMode mode) {
                          std::to_wstring(val) + L"} -ErrorAction SilentlyContinue }";
 
     ExecuteSilentWmi(script);
-    Logger::Info(L"LenovoWmi", L"SetThermalMode sent: " + ThermalToString(mode));
+    Logger::Info(L"Охолодження", L"Встановлено тепловий режим кулерів: " + ThermalToString(mode));
     return true;
 }
 
@@ -72,7 +72,7 @@ bool LenovoWmi::SetMuxMode(GpuMuxMode mode) {
                          std::to_wstring(val) + L"; Data = [uint32]0} -ErrorAction SilentlyContinue }";
 
     ExecuteSilentWmi(script);
-    Logger::Info(L"LenovoWmi", L"SetMuxMode sent: " + MuxToString(mode) + L" (Requires restart to apply)");
+    Logger::Info(L"Відеокарта", L"Встановлено режим MUX Switch: " + MuxToString(mode) + L" (Потребує перезавантаження системи)");
     return true;
 }
 
@@ -85,12 +85,12 @@ GpuMuxMode LenovoWmi::GetMuxMode() {
 bool LenovoWmi::SetKeyboardLight(KbdBacklight light) {
     s_kbdLight = light;
 
-    // 1. First attempt: Direct ultra-fast hardware control via Lenovo Energy Management Driver (0ms latency)
+    // 1. Перша спроба: Пряме апаратне керування через драйвер Lenovo Energy Management (затримка 0 мс)
     HANDLE hDriver = CreateFileW(L"\\\\.\\EnergyDrv", GENERIC_READ | GENERIC_WRITE,
                                  FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hDriver != INVALID_HANDLE_VALUE) {
-        DWORD inVal = 0x10023; // Low brightness
+        DWORD inVal = 0x10023; // Низька яскравість
         if (light == KbdBacklight::Off) inVal = 0x00023;
         else if (light == KbdBacklight::High) inVal = 0x20023;
 
@@ -100,12 +100,12 @@ bool LenovoWmi::SetKeyboardLight(KbdBacklight light) {
                                   &outVal, sizeof(outVal), &bytesRet, NULL);
         CloseHandle(hDriver);
         if (ok) {
-            Logger::Info(L"LenovoWmi", L"SetKeyboardLight applied via EnergyDrv: " + KbdToString(light));
+            Logger::Info(L"Підсвітка", L"Підсвітку клавіатури застосовано через EnergyDrv: " + KbdToString(light));
             return true;
         }
     }
 
-    // 2. Fallback to WMI method call if EnergyDrv is not present
+    // 2. Резервний виклик через WMI якщо EnergyDrv відсутній у системі
     int val = static_cast<int>(light);
     std::wstring script = L"$g = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
                          L"if ($g) { Invoke-CimMethod -InputObject $g -MethodName SetKeyboardLight -Arguments @{Data = [uint32]" + 
@@ -115,12 +115,12 @@ bool LenovoWmi::SetKeyboardLight(KbdBacklight light) {
                          std::to_wstring(val) + L"; Current_State_Type = [byte]1} -ErrorAction SilentlyContinue }";
 
     ExecuteSilentWmi(script);
-    Logger::Info(L"LenovoWmi", L"SetKeyboardLight sent via WMI: " + KbdToString(light));
+    Logger::Info(L"Підсвітка", L"Підсвітку клавіатури надіслано через WMI: " + KbdToString(light));
     return true;
 }
 
 KbdBacklight LenovoWmi::GetKeyboardLight() {
-    // Attempt to query real physical keyboard state from EnergyDrv
+    // Спроба зчитати реальний фізичний стан клавіатури через драйвер EnergyDrv
     HANDLE hDriver = CreateFileW(L"\\\\.\\EnergyDrv", GENERIC_READ | GENERIC_WRITE,
                                  FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);

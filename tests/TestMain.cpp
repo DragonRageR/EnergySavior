@@ -8,8 +8,11 @@
 #include "../include/hardware/WindowsPowerController.hpp"
 #include "../include/hardware/LenovoWmi.hpp"
 #include "../include/hardware/GpuController.hpp"
+#include "../include/hardware/DisplayController.hpp"
+#include "../include/core/SystemInfo.hpp"
 
 #include <fstream>
+
 
 // ======================================================================
 // 1. AppConfig & Versioning Tests
@@ -231,6 +234,40 @@ TEST_CASE(UpdateManager_StatusDisplayInitial) {
     ASSERT_TRUE(display.find(L"alpha-2026.10") != std::wstring::npos);
 }
 
+// ======================================================================
+// 10. Display Wattage, Process Hierarchy, and Top Processes Tests
+// ======================================================================
+TEST_CASE(Display_DynamicWattageCalculation) {
+    float w60_min = DisplayController::CalculateDisplayWatts(60, 0);
+    float w60_max = DisplayController::CalculateDisplayWatts(60, 100);
+    float w144_max = DisplayController::CalculateDisplayWatts(144, 100);
+
+    // 60Hz 0% brightness should be lower than 60Hz 100%
+    ASSERT_TRUE(w60_min < w60_max);
+    // 144Hz 100% brightness should consume more than 60Hz 100%
+    ASSERT_TRUE(w144_max > w60_max);
+    // Clamping checks
+    ASSERT_TRUE(DisplayController::CalculateDisplayWatts(60, -50) == w60_min);
+    ASSERT_TRUE(DisplayController::CalculateDisplayWatts(60, 150) == w60_max);
+}
+
+TEST_CASE(SystemInfo_TopMemoryProcesses) {
+    auto procs = SystemInfo::GetTopMemoryProcesses(5);
+    ASSERT_TRUE(!procs.empty());
+    ASSERT_TRUE(procs.size() <= 5);
+    // Ensure sorted in descending order of memory
+    for (size_t i = 1; i < procs.size(); i++) {
+        ASSERT_TRUE(procs[i - 1].memMB >= procs[i].memMB);
+    }
+}
+
+TEST_CASE(GpuController_SafeTerminationChecks) {
+    // Attempting to terminate PID 0 or current process must be safely rejected
+    ASSERT_FALSE(GpuController::TerminateProcessByPid(0));
+    ASSERT_FALSE(GpuController::TerminateProcessByPid(GetCurrentProcessId()));
+}
+
 int main() {
     return UnitTest::RunAll();
 }
+

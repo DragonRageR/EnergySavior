@@ -1,6 +1,6 @@
-# 📘 Інструкція та правила розробки EnergyControl (Development & Architecture Guide)
+# 📘 Інструкція та правила розробки EnergySavior (Development & Architecture Guide)
 
-Цей документ визначає єдиний стандарт архітектури, правила коду, додавання нового функціоналу та підготовки релізів для проекту **EnergyControl**.
+Цей документ визначає єдиний стандарт архітектури, правила коду, додавання нового функціоналу та підготовки релізів для проекту **EnergySavior**.
 
 ---
 
@@ -9,11 +9,11 @@
 Проект побудовано за модульним принципом з розділенням відповідальності (Separation of Concerns):
 
 ```
-EnergyControl/
+EnergySavior/
 ├── include/
 │   ├── core/                      # Ядро: конфігурація, логування, фонова телеметрія
 │   │   ├── AppConfig.hpp          # Читання/запис config.ini, UAC elevation, автозапуск
-│   │   ├── Logger.hpp             # Багатопотоковий логер з ротацією (energy_control.log)
+│   │   ├── Logger.hpp             # Багатопотоковий логер з ротацією (energy_savior.log)
 │   │   ├── SystemInfo.hpp         # Динамічне зчитування SMBIOS / Registry
 │   │   └── TelemetryThread.hpp    # Фоновий воркер-потік, кешування та debounce
 │   ├── hardware/                  # Апаратні контролери (Hardware Abstraction Layer)
@@ -34,7 +34,7 @@ EnergyControl/
 │   ├── app.manifest               # UAC requireAdministrator та DPI awareness
 │   ├── app.rc                     # Windows Resource script
 │   └── app.res                    # Зкомпільований ресурс (COFF)
-├── EnergyControl.exe.manifest     # Маніфест для Windows Activation Context
+├── EnergySavior.exe.manifest      # Маніфест для Windows Activation Context
 ├── main.cpp                       # Точка входу (WinMain), черга повідомлень Windows
 ├── build.bat                      # Скрипт компіляції (GCC MinGW-w64 C++20)
 ├── install_autostart.bat          # Реєстрація автозапуску (Run key + Task Scheduler)
@@ -65,7 +65,7 @@ EnergyControl/
 
 ### Правило 4: Обов'язкове логування (Structured Logging)
 * Будь-яка зміна апаратного стану (підключення AC/DC, зміна частоти екрану, режим охолодження, стан MUX, завершення процесів GPU) **повинна логуватися** через `Logger::Info()`, `Logger::Warn()` або `Logger::Error()`.
-* Лог-файл зберігається у `%LOCALAPPDATA%\EnergyControl\energy_control.log` та має автоматичну ротацію при досягненні 2 MB.
+* Лог-файл зберігається у `%LOCALAPPDATA%\EnergySavior\energy_control.log` та має автоматичну ротацію при досягненні 2 MB.
 
 ### Правило 5: Візуальні стандарти GDI+
 * Обов'язкове подвійне буферування (`CreateCompatibleDC` + `CreateCompatibleBitmap` + `BitBlt`) для усунення мерехтіння.
@@ -131,7 +131,7 @@ EnergyControl/
 ```powershell
 .\build.bat debug
 ```
-Генерує `EnergyControl_debug.exe` з налагоджувальними символами (`-g3`, `-O0`, `-DDEBUG`).
+Генерує `EnergySavior_debug.exe` з налагоджувальними символами (`-g3`, `-O0`, `-DDEBUG`).
 
 ---
 
@@ -162,12 +162,12 @@ EnergyControl/
 У модуль `CrashHandler` інтегровано перехоплення системних помилок процесора та пам'яті:
 * **Structured Exception Handling (SEH):** Перехоплює `EXCEPTION_ACCESS_VIOLATION (0xC0000005)`, `EXCEPTION_STACK_OVERFLOW`, ділення на нуль тощо.
 * **Генерація Minidump (.dmp):** Викликає `MiniDumpWriteDump` з бібліотеки `dbghelp.dll`. Отриманий файл можна відкрити у WinDbg або Visual Studio для точного встановлення рядка збою.
-* **Стек викликів (Stack Backtrace):** Автоматичний запис адрес інструкцій та зміщень модулів (`EnergyControl.exe+0x837e`).
-* **Збереження звіту:** Створюється `%LOCALAPPDATA%\EnergyControl\crash_report_YYYY-MM-DD_HH-MM-SS.log`.
+* **Стек викликів (Stack Backtrace):** Автоматичний запис адрес інструкцій та зміщень модулів (`EnergySavior.exe+0x837e`).
+* **Збереження звіту:** Створюється `%LOCALAPPDATA%\EnergySavior\crash_report_YYYY-MM-DD_HH-MM-SS.log`.
 * **Діалогове вікно:** Користувачеві виводиться системне вікно з поясненням збою та кнопкою швидкого переходу до файлів у Провіднику для надсилання репорту.
 * **Тестування краш-хендлера:**
   ```powershell
-  .\EnergyControl.exe --test-crash
+  .\EnergySavior.exe --test-crash
   ```
 
 ---
@@ -185,13 +185,23 @@ EnergyControl/
 
 ---
 
-## 📦 8. Правила оформлення комітів та версіонування (SemVer)
+## 📦 8. Правила оформлення комітів та версіонування (CalVer)
 
-* **Стадія проекту:** Pre-Release Alpha (`v0.x.y-alpha`).
-* До відкриття публічного стабільного релізу версії мають суфікс `-alpha`.
+* **Стандарт версіонування:** Calendar Versioning у форматі `<стадія>-<рік>.<місяць>[.<патч>]` (наприклад: `alpha-2026.10`).
+* До відкриття публічного стабільного релізу версії мають префікс `alpha-` або `beta-`.
+* Стабільні релізи позначаються як `vYYYY.MM` (наприклад: `v2026.10`).
 * Використовуйте стандарт [Conventional Commits](https://www.conventionalcommits.org/):
   * `feat:` Новий функціонал.
   * `fix:` Виправлення помилки або крашу.
   * `test:` Додавання або оновлення юніт-тестів.
   * `perf:` Оптимізація швидкодії або прапорців збірки.
   * `docs:` Оновлення документації.
+
+---
+
+## 🇺🇦 9. Мовний стандарт та українізація (Language & Localization)
+
+* Усі інтерфейсні тексти, назви вкладок, сповіщення в треї та підказки пишуться виключно українською мовою.
+* Коментарі в коді та документація ведуться українською мовою.
+* Журнал подій (`Logger`) записує дії та зміни станів українською мовою.
+

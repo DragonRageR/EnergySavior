@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <string>
 
-#define APP_NAME L"Lenovo EnergyControl"
+#define APP_NAME L"EnergySavior"
 #define APP_VERSION L"alpha-2026.10"
 #define APP_STAGE L"Alpha"
 #define APP_YEAR_MONTH L"2026.10"

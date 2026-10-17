@@ -45,7 +45,7 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
     wchar_t appData[MAX_PATH] = { 0 };
     std::wstring dir = L".";
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appData))) {
-        dir = std::wstring(appData) + L"\\EnergyControl";
+        dir = std::wstring(appData) + L"\\EnergySavior";
         CreateDirectoryW(dir.c_str(), NULL);
     }
 
@@ -82,7 +82,7 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
     // 2. Format detailed text report
     std::wstringstream report;
     report << L"======================================================================\n";
-    report << L"               LENOVO ENERGYCONTROL — CRASH REPORT                    \n";
+    report << L"                       ENERGYSAVIOR — CRASH REPORT                    \n";
     report << L"======================================================================\n\n";
 
     report << L"Версія програми:      " << AppConfig::GetAppVersion() << L" (" << AppConfig::GetAppStage() << L")\n";
@@ -193,15 +193,15 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
     Logger::Error(L"CRASH", L"CRITICAL APPLICATION CRASH OCCURRED! Report: " + reportPath);
 
     // 5. Native User Error Dialog (suppressed if --silent is passed)
-    std::wstring msgBoxText = L"⚠️ СТАВСЯ КРИТИЧНИЙ ЗБІЙ ПРОГРАМИ (CRASH)\n\n"
-                              L"EnergyControl зіткнувся з помилкою та не може продовжувати роботу.\n\n"
+    std::wstring msgBoxText = L"[!] СТАВСЯ КРИТИЧНИЙ ЗБІЙ ПРОГРАМИ (CRASH)\n\n"
+                              L"EnergySavior зіткнувся з помилкою та не може продовжувати роботу.\n\n"
                               L"Звіт про помилку та дамп пам'яті збережено:\n" +
                               reportPath + L"\n\n"
                               L"Натисніть 'ОК', щоб відкрити папку зі звітом для надсилання розробнику.";
 
     bool isSilent = (wcsstr(GetCommandLineW(), L"--silent") != nullptr);
     if (!isSilent) {
-        int btn = MessageBoxW(NULL, msgBoxText.c_str(), L"EnergyControl Crash Handler", MB_OKCANCEL | MB_ICONERROR | MB_SYSTEMMODAL);
+        int btn = MessageBoxW(NULL, msgBoxText.c_str(), L"EnergySavior Crash Handler", MB_OKCANCEL | MB_ICONERROR | MB_SYSTEMMODAL);
         if (btn == IDOK) {
             // Highlight report in explorer
             std::wstring exploreCmd = L"/select,\"" + reportPath + L"\"";

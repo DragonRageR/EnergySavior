@@ -4,7 +4,7 @@
 std::wstring AppConfig::GetConfigDir() {
     wchar_t appData[MAX_PATH] = { 0 };
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appData))) {
-        std::wstring path = std::wstring(appData) + L"\\EnergyControl";
+        std::wstring path = std::wstring(appData) + L"\\EnergySavior";
         CreateDirectoryW(path.c_str(), NULL);
         return path;
     }
@@ -56,17 +56,20 @@ bool AppConfig::SetAutoStartEnabled(bool enable) {
                       0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
         if (enable) {
             std::wstring runCmd = L"\"" + std::wstring(exePath) + L"\" --minimized";
-            RegSetValueExW(hKey, L"LenovoEnergyControl", 0, REG_SZ, 
+            RegSetValueExW(hKey, L"EnergySavior", 0, REG_SZ, 
                            (const BYTE*)runCmd.c_str(), (DWORD)((runCmd.length() + 1) * sizeof(wchar_t)));
         } else {
-            RegDeleteValueW(hKey, L"LenovoEnergyControl");
+            RegDeleteValueW(hKey, L"EnergySavior");
         }
+        // Cleanup any legacy keys
+        RegDeleteValueW(hKey, L"LenovoEnergyControl");
+        RegDeleteValueW(hKey, L"EnergyControl");
         RegCloseKey(hKey);
     }
 
     // 2. Register elevated Task Scheduler task for UAC bypass
     if (enable) {
-        std::wstring params = L"/create /tn \"LenovoEnergyControl\" /tr \"\\\"" + 
+        std::wstring params = L"/create /tn \"EnergySavior\" /tr \"\\\"" + 
                               std::wstring(exePath) + L"\\\" --minimized\" /rl HIGHEST /sc ONLOGON /f";
         
         SHELLEXECUTEINFOW sei = { sizeof(sei) };
@@ -82,18 +85,22 @@ bool AppConfig::SetAutoStartEnabled(bool enable) {
                 CloseHandle(sei.hProcess);
             }
             // Allow task to start on battery
-            std::wstring psCmd = L"-NoProfile -Command \"Set-ScheduledTask -TaskName 'LenovoEnergyControl' -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0)\"";
+            std::wstring psCmd = L"-NoProfile -Command \"Set-ScheduledTask -TaskName 'EnergySavior' -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0)\"";
             ShellExecuteW(NULL, L"runas", L"powershell.exe", psCmd.c_str(), NULL, SW_HIDE);
+
+            // Clean up legacy scheduled task if it exists
+            ShellExecuteW(NULL, L"runas", L"schtasks.exe", L"/delete /tn \"LenovoEnergyControl\" /f", NULL, SW_HIDE);
             return true;
         }
     } else {
-        std::wstring params = L"/delete /tn \"LenovoEnergyControl\" /f";
+        std::wstring params = L"/delete /tn \"EnergySavior\" /f";
         SHELLEXECUTEINFOW sei = { sizeof(sei) };
         sei.lpVerb = L"runas";
         sei.lpFile = L"schtasks.exe";
         sei.lpParameters = params.c_str();
         sei.nShow = SW_HIDE;
-        sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+        // Clean up legacy scheduled task too
+        ShellExecuteW(NULL, L"runas", L"schtasks.exe", L"/delete /tn \"LenovoEnergyControl\" /f", NULL, SW_HIDE);
 
         if (ShellExecuteExW(&sei)) {
             if (sei.hProcess) {
