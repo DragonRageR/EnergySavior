@@ -83,18 +83,9 @@ void TrayManager::UpdateIcon(bool isEco) {
     Shell_NotifyIconW(NIM_MODIFY, &s_nid);
 }
 
-void TrayManager::ShowBalloon(const std::wstring& title, const std::wstring& msg) {
-    s_nid.uFlags = NIF_INFO;
-    wcscpy_s(s_nid.szInfoTitle, title.c_str());
-    wcscpy_s(s_nid.szInfo, msg.c_str());
-    s_nid.dwInfoFlags = NIIF_INFO;
-    s_nid.uTimeout = 2500;
-    Shell_NotifyIconW(NIM_MODIFY, &s_nid);
-
-    // CRITICAL: Immediately clear NIF_INFO so subsequent timer ticks don't repeat the notification!
-    s_nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
-    s_nid.szInfo[0] = 0;
-    s_nid.szInfoTitle[0] = 0;
+void TrayManager::ShowBalloon(const std::wstring& /*title*/, const std::wstring& /*msg*/) {
+    // Windows OS notifications are completely disabled globally per user request
+    return;
 }
 
 void TrayManager::ShowContextMenu() {

@@ -80,11 +80,33 @@ GpuMuxMode LenovoWmi::GetMuxMode() {
     return s_muxMode;
 }
 
+#define IOCTL_ENERGY_KEYBOARD 0x83102144
+
 bool LenovoWmi::SetKeyboardLight(KbdBacklight light) {
     s_kbdLight = light;
-    int val = static_cast<int>(light);
 
-    // Try both LENOVO_GAMEZONE_DATA and LENOVO_LIGHTING_METHOD to support all LOQ/Legion firmware
+    // 1. First attempt: Direct ultra-fast hardware control via Lenovo Energy Management Driver (0ms latency)
+    HANDLE hDriver = CreateFileW(L"\\\\.\\EnergyDrv", GENERIC_READ | GENERIC_WRITE,
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                                 OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hDriver != INVALID_HANDLE_VALUE) {
+        DWORD inVal = 0x10023; // Low brightness
+        if (light == KbdBacklight::Off) inVal = 0x00023;
+        else if (light == KbdBacklight::High) inVal = 0x20023;
+
+        DWORD outVal = 0;
+        DWORD bytesRet = 0;
+        BOOL ok = DeviceIoControl(hDriver, IOCTL_ENERGY_KEYBOARD, &inVal, sizeof(inVal),
+                                  &outVal, sizeof(outVal), &bytesRet, NULL);
+        CloseHandle(hDriver);
+        if (ok) {
+            Logger::Info(L"LenovoWmi", L"SetKeyboardLight applied via EnergyDrv: " + KbdToString(light));
+            return true;
+        }
+    }
+
+    // 2. Fallback to WMI method call if EnergyDrv is not present
+    int val = static_cast<int>(light);
     std::wstring script = L"$g = Get-CimInstance -Namespace root/wmi -ClassName LENOVO_GAMEZONE_DATA -ErrorAction SilentlyContinue; "
                          L"if ($g) { Invoke-CimMethod -InputObject $g -MethodName SetKeyboardLight -Arguments @{Data = [uint32]" + 
                          std::to_wstring(val) + L"} -ErrorAction SilentlyContinue }; "
@@ -93,15 +115,34 @@ bool LenovoWmi::SetKeyboardLight(KbdBacklight light) {
                          std::to_wstring(val) + L"; Current_State_Type = [byte]1} -ErrorAction SilentlyContinue }";
 
     ExecuteSilentWmi(script);
-    Logger::Info(L"LenovoWmi", L"SetKeyboardLight sent: " + KbdToString(light));
+    Logger::Info(L"LenovoWmi", L"SetKeyboardLight sent via WMI: " + KbdToString(light));
     return true;
 }
 
 KbdBacklight LenovoWmi::GetKeyboardLight() {
+    // Attempt to query real physical keyboard state from EnergyDrv
+    HANDLE hDriver = CreateFileW(L"\\\\.\\EnergyDrv", GENERIC_READ | GENERIC_WRITE,
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                                 OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hDriver != INVALID_HANDLE_VALUE) {
+        DWORD inVal = 0x22;
+        DWORD outVal = 0;
+        DWORD bytesRet = 0;
+        if (DeviceIoControl(hDriver, IOCTL_ENERGY_KEYBOARD, &inVal, sizeof(inVal),
+                            &outVal, sizeof(outVal), &bytesRet, NULL)) {
+            CloseHandle(hDriver);
+            if (outVal == 0x1) s_kbdLight = KbdBacklight::Off;
+            else if (outVal == 0x3) s_kbdLight = KbdBacklight::Low;
+            else if (outVal == 0x5) s_kbdLight = KbdBacklight::High;
+            return s_kbdLight;
+        }
+        CloseHandle(hDriver);
+    }
     return s_kbdLight;
 }
 
 void LenovoWmi::ToggleKeyboardLight() {
+    GetKeyboardLight();
     int next = (static_cast<int>(s_kbdLight) + 1) % 3;
     SetKeyboardLight(static_cast<KbdBacklight>(next));
 }

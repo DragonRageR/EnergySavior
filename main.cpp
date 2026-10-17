@@ -5,7 +5,6 @@
 #include <gdiplus.h>
 #include <string>
 
-#include "include/core/SystemInfo.hpp"
 #include "include/core/AppConfig.hpp"
 #include "include/core/Logger.hpp"
 #include "include/core/CrashHandler.hpp"

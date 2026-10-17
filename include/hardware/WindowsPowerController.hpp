@@ -20,6 +20,7 @@ class WindowsPowerController {
 public:
     static WindowsPowerStatus Query();
     static bool SetPowerMode(WindowsPowerMode mode, bool onBattery);
+    static bool ToggleEnergySaver();
     static bool ApplyEcoProfile();
     static bool ApplyPerformanceProfile();
     static std::wstring ModeToString(WindowsPowerMode mode);

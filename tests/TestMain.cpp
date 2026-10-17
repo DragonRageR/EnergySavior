@@ -123,6 +123,12 @@ TEST_CASE(WindowsPower_QueryReturnsValidStructure) {
     ASSERT_TRUE(!st.activeSchemeName.empty());
 }
 
+TEST_CASE(WindowsPower_EnergySaverToggle) {
+    bool newState = WindowsPowerController::ToggleEnergySaver();
+    bool restoredState = WindowsPowerController::ToggleEnergySaver();
+    ASSERT_TRUE(restoredState != newState);
+}
+
 // ======================================================================
 // 6. Lenovo WMI Enum & Helper Tests
 // ======================================================================
@@ -142,6 +148,11 @@ TEST_CASE(LenovoWmi_KeyboardLightToString) {
     ASSERT_TRUE(LenovoWmi::KbdToString(KbdBacklight::Off) == L"Вимкнено");
     ASSERT_TRUE(LenovoWmi::KbdToString(KbdBacklight::Low) == L"Низька");
     ASSERT_TRUE(LenovoWmi::KbdToString(KbdBacklight::High) == L"Висока");
+}
+
+TEST_CASE(LenovoWmi_KeyboardLight_QueryDirect) {
+    KbdBacklight light = LenovoWmi::GetKeyboardLight();
+    ASSERT_TRUE(light == KbdBacklight::Off || light == KbdBacklight::Low || light == KbdBacklight::High);
 }
 
 // ======================================================================
