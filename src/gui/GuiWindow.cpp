@@ -115,9 +115,6 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
     SolidBrush textRed(Color(255, 255, 23, 68));
 
     std::wstring appTitle = L"ENERGY CONTROL";
-    if (!td.system.model.empty()) {
-        appTitle += L"  •  " + td.system.model;
-    }
     g.DrawString(appTitle.c_str(), -1, &fontTitle, PointF(25, 14), &textWhite);
 
     std::wstring sysSub = L"BIOS: " + td.system.biosVersion + L"  |  " + td.system.cpuName;
