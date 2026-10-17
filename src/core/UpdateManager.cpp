@@ -11,7 +11,9 @@
 #include <fstream>
 #include <thread>
 
+#ifdef _MSC_VER
 #pragma comment(lib, "winhttp.lib")
+#endif
 
 void UpdateManager::Init(HWND notifyHwnd) {
     s_notifyHwnd = notifyHwnd;

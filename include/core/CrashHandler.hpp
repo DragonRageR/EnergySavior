@@ -6,6 +6,6 @@ class CrashHandler {
 public:
     static void Init();
     static std::wstring GetExceptionDescription(DWORD code);
-    static void GenerateCrashReport(EXCEPTION_POINTERS* ep, const std::wstring& customReason = L"");
+    static void GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* customReason = nullptr);
     static void TriggerSyntheticCrash(); // For --test-crash verification
 };

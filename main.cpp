@@ -16,12 +16,14 @@
 
 using namespace Gdiplus;
 
+#ifdef _MSC_VER
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "powrprof.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
+#endif
 
 #define WINDOW_WIDTH 880
 #define WINDOW_HEIGHT 720

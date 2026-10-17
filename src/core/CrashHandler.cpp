@@ -41,7 +41,7 @@ std::wstring CrashHandler::GetExceptionDescription(DWORD code) {
     }
 }
 
-void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const std::wstring& customReason) {
+void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* customReason) {
     wchar_t appData[MAX_PATH] = { 0 };
     std::wstring dir = L".";
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appData))) {
@@ -91,7 +91,7 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const std::wstrin
     report << L"TID потоку:           " << GetCurrentThreadId() << L"\n";
     report << L"Права адміністратора: " << (AppConfig::IsElevated() ? L"ТАК (Elevated)" : L"НІ (Standard User)") << L"\n\n";
 
-    if (!customReason.empty()) {
+    if (customReason && *customReason) {
         report << L"Причина збою (User/Runtime): " << customReason << L"\n\n";
     }
 
@@ -232,7 +232,7 @@ static void TerminateHandler() {
         reason += L" Невідомий тип винятку (не std::exception).";
     }
 
-    CrashHandler::GenerateCrashReport(nullptr, reason);
+    CrashHandler::GenerateCrashReport(nullptr, reason.c_str());
     abort();
 }
 
