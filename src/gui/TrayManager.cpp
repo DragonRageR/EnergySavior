@@ -118,6 +118,7 @@ void TrayManager::ShowContextMenu() {
     AppendMenuW(hMenu, MF_STRING | (autoStart ? MF_CHECKED : MF_UNCHECKED), ID_TRAY_AUTOSTART, L"Автозапуск з Windows (Адміністратор)");
 
     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_CHECK_UPDATE, L"[🔄] Перевірити оновлення...");
     AppendMenuW(hMenu, MF_STRING, ID_TRAY_OPEN_LOG, L"[!] Відкрити журнал подій (Лог)");
     AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"Вийти з програми");
 

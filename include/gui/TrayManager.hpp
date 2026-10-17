@@ -9,7 +9,8 @@
 #define ID_TRAY_AUTOSWITCH 2004
 #define ID_TRAY_AUTOSTART 2005
 #define ID_TRAY_OPEN_LOG 2006
-#define ID_TRAY_EXIT 2007
+#define ID_TRAY_CHECK_UPDATE 2007
+#define ID_TRAY_EXIT 2008
 
 class TrayManager {
 private:

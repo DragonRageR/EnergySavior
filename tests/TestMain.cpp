@@ -2,6 +2,7 @@
 #include "../include/core/AppConfig.hpp"
 #include "../include/core/Logger.hpp"
 #include "../include/core/CrashHandler.hpp"
+#include "../include/core/UpdateManager.hpp"
 #include "../include/hardware/BatteryController.hpp"
 #include "../include/hardware/CpuController.hpp"
 #include "../include/hardware/WindowsPowerController.hpp"
@@ -17,6 +18,13 @@ TEST_CASE(AppConfig_VersionNotEmpty) {
     std::wstring ver = AppConfig::GetAppVersion();
     ASSERT_TRUE(!ver.empty());
     ASSERT_TRUE(ver.find(L"alpha") != std::wstring::npos);
+}
+
+TEST_CASE(AppConfig_CalVerNamingStandard) {
+    std::wstring ver = AppConfig::GetAppVersion();
+    ASSERT_TRUE(ver == L"alpha-2026.10");
+    ASSERT_TRUE(AppConfig::GetAppYearMonth() == L"2026.10");
+    ASSERT_TRUE(AppConfig::GetAppStage() == L"Alpha");
 }
 
 TEST_CASE(AppConfig_StageIsAlpha) {
@@ -159,6 +167,57 @@ TEST_CASE(CrashHandler_ExceptionDescriptions) {
 
     std::wstring descStack = CrashHandler::GetExceptionDescription(EXCEPTION_STACK_OVERFLOW);
     ASSERT_TRUE(descStack.find(L"0xC00000FD") != std::wstring::npos);
+}
+
+// ======================================================================
+// 9. In-App Update Manager & Version Control Tests
+// ======================================================================
+TEST_CASE(UpdateManager_ParseVersionLogic) {
+    int y = 0, m = 0, p = 0, s = 0;
+    ASSERT_TRUE(UpdateManager::ParseVersion(L"alpha-2026.10", y, m, p, s));
+    ASSERT_EQ(y, 2026);
+    ASSERT_EQ(m, 10);
+    ASSERT_EQ(p, 0);
+    ASSERT_EQ(s, 1); // Alpha
+
+    ASSERT_TRUE(UpdateManager::ParseVersion(L"beta-2026.11.2", y, m, p, s));
+    ASSERT_EQ(y, 2026);
+    ASSERT_EQ(m, 11);
+    ASSERT_EQ(p, 2);
+    ASSERT_EQ(s, 2); // Beta
+
+    ASSERT_TRUE(UpdateManager::ParseVersion(L"v2027.01", y, m, p, s));
+    ASSERT_EQ(y, 2027);
+    ASSERT_EQ(m, 1);
+    ASSERT_EQ(p, 0);
+    ASSERT_EQ(s, 4); // Stable
+}
+
+TEST_CASE(UpdateManager_IsNewerVersionComparison) {
+    // Newer month in same year
+    ASSERT_TRUE(UpdateManager::IsNewerVersion(L"alpha-2026.10", L"alpha-2026.11"));
+    ASSERT_FALSE(UpdateManager::IsNewerVersion(L"alpha-2026.11", L"alpha-2026.10"));
+
+    // Newer year
+    ASSERT_TRUE(UpdateManager::IsNewerVersion(L"alpha-2026.12", L"alpha-2027.01"));
+
+    // Newer patch
+    ASSERT_TRUE(UpdateManager::IsNewerVersion(L"alpha-2026.10", L"alpha-2026.10.1"));
+    ASSERT_FALSE(UpdateManager::IsNewerVersion(L"alpha-2026.10.1", L"alpha-2026.10"));
+
+    // Higher stage (beta > alpha)
+    ASSERT_TRUE(UpdateManager::IsNewerVersion(L"alpha-2026.10", L"beta-2026.10"));
+    ASSERT_FALSE(UpdateManager::IsNewerVersion(L"beta-2026.10", L"alpha-2026.10"));
+
+    // Same version -> not newer
+    ASSERT_FALSE(UpdateManager::IsNewerVersion(L"alpha-2026.10", L"alpha-2026.10"));
+}
+
+TEST_CASE(UpdateManager_StatusDisplayInitial) {
+    UpdateManager::Init();
+    std::wstring display = UpdateManager::GetStatusDisplayString();
+    ASSERT_TRUE(!display.empty());
+    ASSERT_TRUE(display.find(L"alpha-2026.10") != std::wstring::npos);
 }
 
 int main() {

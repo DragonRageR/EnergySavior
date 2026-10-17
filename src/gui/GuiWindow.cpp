@@ -2,6 +2,7 @@
 #include "../../include/core/TelemetryThread.hpp"
 #include "../../include/core/AppConfig.hpp"
 #include "../../include/core/Logger.hpp"
+#include "../../include/core/UpdateManager.hpp"
 #include "../../include/gui/TrayManager.hpp"
 #include <iomanip>
 #include <sstream>
@@ -75,6 +76,9 @@ void GuiWindow::InitButtons() {
     // 10. Titlebar Buttons: Minimize (ID 16), Close (ID 17)
     s_buttons.push_back({ 16, Rect(808, 12, 28, 26), L"—", false, false, Color(255, 100, 100, 100), Color(255, 40, 45, 55), Color(255, 22, 27, 34) });
     s_buttons.push_back({ 17, Rect(842, 12, 28, 26), L"✕", false, false, Color(255, 255, 60, 60), Color(255, 80, 25, 25), Color(255, 22, 27, 34) });
+
+    // 11. In-App Update Button (ID 20) in bottom footer
+    s_buttons.push_back({ 20, Rect(630, 680, 225, 28), L"[🔄 Оновлення]", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34) });
 }
 
 void GuiWindow::Paint(HWND hWnd, HDC hdc) {
@@ -252,6 +256,19 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
             btn.text = L"[!] Журнал подій (Лог)";
             btn.isActive = false;
         }
+        else if (btn.id == 20) {
+            btn.text = UpdateManager::GetStatusDisplayString();
+            UpdateStatus st = UpdateManager::GetStatus();
+            if (st == UpdateStatus::UpdateAvailable || st == UpdateStatus::ReadyToRestart) {
+                btn.isActive = true;
+                btn.activeColor = Color(255, 0, 230, 118);
+            } else if (st == UpdateStatus::Checking || st == UpdateStatus::Downloading) {
+                btn.isActive = true;
+                btn.activeColor = Color(255, 0, 229, 255);
+            } else {
+                btn.isActive = false;
+            }
+        }
     }
 
     // 5. NVIDIA Watchdog Card (Y: 565, H: 110, W: 840)
@@ -301,6 +318,7 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
         SolidBrush bBtnText(btn.isActive ? Color(255, 10, 15, 20) : Color(255, 240, 246, 252));
         if (btn.id == 15) bBtnText.SetColor(Color(255, 255, 120, 120));
         if (btn.id == 18) bBtnText.SetColor(Color(255, 234, 179, 8));
+        if (btn.id == 20 && !btn.isActive) bBtnText.SetColor(Color(255, 0, 229, 255));
 
         if (btn.id == 1 || btn.id == 19) {
             g.DrawString(btn.text.c_str(), -1, &fHeroBtn, RectF((REAL)btn.bounds.X, (REAL)btn.bounds.Y, (REAL)btn.bounds.Width, (REAL)btn.bounds.Height), &sfCenter, &bBtnText);
@@ -403,6 +421,38 @@ void GuiWindow::HandleClick(HWND hWnd, int x, int y) {
                 case 18: // Open Log
                     Logger::OpenLogFile();
                     break;
+                case 20: { // In-App Update check / install
+                    UpdateStatus st = UpdateManager::GetStatus();
+                    if (st == UpdateStatus::UpdateAvailable) {
+                        int res = MessageBoxW(hWnd, 
+                            (L"Знайдено нову версію EnergyControl: " + UpdateManager::GetInfo().latestVersion + 
+                             L"\n\nБажаєте завантажити та підготувати оновлення зараз?").c_str(),
+                            L"EnergyControl Auto-Update", MB_YESNO | MB_ICONQUESTION);
+                        if (res == IDYES) {
+                            UpdateManager::DownloadAndInstallAsync([hWnd](bool ok, const std::wstring& msg) {
+                                if (ok) {
+                                    int restart = MessageBoxW(hWnd, 
+                                        L"Оновлення успішно завантажено!\nПерезапустити EnergyControl для застосування?", 
+                                        L"EnergyControl Auto-Update", MB_YESNO | MB_ICONINFORMATION);
+                                    if (restart == IDYES) {
+                                        UpdateManager::PerformSelfUpdateAndRestart(msg);
+                                    }
+                                } else {
+                                    MessageBoxW(hWnd, msg.c_str(), L"Помилка оновлення", MB_OK | MB_ICONERROR);
+                                }
+                            });
+                        }
+                    } else if (st == UpdateStatus::ReadyToRestart) {
+                        UpdateManager::PerformSelfUpdateAndRestart(L"");
+                    } else if (st != UpdateStatus::Checking && st != UpdateStatus::Downloading) {
+                        UpdateManager::CheckForUpdatesAsync([hWnd](UpdateStatus s, const UpdateInfo& info) {
+                            if (s == UpdateStatus::UpToDate) {
+                                TrayManager::ShowBalloon(L"EnergyControl", L"У вас встановлено найновішу версію!");
+                            }
+                        });
+                    }
+                    break;
+                }
             }
             InvalidateRect(hWnd, NULL, FALSE);
             break;

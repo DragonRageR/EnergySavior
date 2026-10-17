@@ -9,6 +9,7 @@
 #include "include/core/AppConfig.hpp"
 #include "include/core/Logger.hpp"
 #include "include/core/CrashHandler.hpp"
+#include "include/core/UpdateManager.hpp"
 #include "include/core/TelemetryThread.hpp"
 #include "include/gui/GuiWindow.hpp"
 #include "include/gui/TrayManager.hpp"
@@ -30,6 +31,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_CREATE: {
             GuiWindow::InitButtons();
             TelemetryThread::Start(hWnd);
+            UpdateManager::Init(hWnd);
+            if (AppConfig::IsAutoUpdateCheckEnabled()) {
+                UpdateManager::CheckForUpdatesAsync();
+            }
             break;
         }
 
@@ -102,6 +107,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     bool cur = AppConfig::IsAutoStartEnabled();
                     AppConfig::SetAutoStartEnabled(!cur);
                     InvalidateRect(hWnd, NULL, FALSE);
+                    break;
+                }
+                case ID_TRAY_CHECK_UPDATE: {
+                    UpdateManager::CheckForUpdatesAsync([hWnd](UpdateStatus s, const UpdateInfo& info) {
+                        if (s == UpdateStatus::UpToDate) {
+                            TrayManager::ShowBalloon(L"EnergyControl", L"У вас встановлено найновішу версію!");
+                        }
+                    });
                     break;
                 }
                 case ID_TRAY_OPEN_LOG:

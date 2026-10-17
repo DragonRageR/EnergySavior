@@ -16,7 +16,7 @@ if /I "%MODE%"=="test" (
 
 if /I "%MODE%"=="debug" (
     echo [BUILD] Compiling Debug binary with symbols and runtime diagnostics...
-    g++ -O0 -g3 -std=c++20 -DDEBUG -Wall -Wno-missing-field-initializers -Wno-unused-parameter main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -lcrypt32 -ldbghelp -mwindows -o EnergyControl_debug.exe
+    g++ -O0 -g3 -std=c++20 -DDEBUG -Wall -Wno-missing-field-initializers -Wno-unused-parameter main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -lcrypt32 -ldbghelp -lwinhttp -lurlmon -mwindows -o EnergyControl_debug.exe
     if errorlevel 1 goto :FAILED
     echo [SUCCESS] EnergyControl_debug.exe generated successfully!
     goto :END
@@ -24,7 +24,7 @@ if /I "%MODE%"=="debug" (
 
 rem Default: Release (Equivalent to cargo build --release in Rust)
 echo [BUILD] Compiling Release binary: -O3 -flto -march=x86-64-v2 -DNDEBUG -s...
-g++ -O3 -std=c++20 -flto -march=x86-64-v2 -DNDEBUG -s -Wall -Wno-missing-field-initializers -Wno-unused-parameter main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -lcrypt32 -ldbghelp -mwindows -o EnergyControl.exe
+g++ -O3 -std=c++20 -flto -march=x86-64-v2 -DNDEBUG -s -Wall -Wno-missing-field-initializers -Wno-unused-parameter main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -lcrypt32 -ldbghelp -lwinhttp -lurlmon -mwindows -o EnergyControl.exe
 
 if errorlevel 1 goto :FAILED
 

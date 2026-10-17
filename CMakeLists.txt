@@ -40,6 +40,8 @@ if(WIN32)
         ole32
         crypt32
         dbghelp
+        winhttp
+        urlmon
     )
 endif()
 
@@ -63,6 +65,8 @@ if(WIN32)
         ole32
         crypt32
         dbghelp
+        winhttp
+        urlmon
     )
 endif()
 

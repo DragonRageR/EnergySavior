@@ -105,3 +105,13 @@ bool AppConfig::SetAutoStartEnabled(bool enable) {
     }
     return false;
 }
+
+bool AppConfig::IsAutoUpdateCheckEnabled() {
+    std::wstring file = GetConfigFile();
+    return (GetPrivateProfileIntW(L"Settings", L"AutoUpdateCheck", 1, file.c_str()) == 1);
+}
+
+void AppConfig::SetAutoUpdateCheckEnabled(bool enable) {
+    std::wstring file = GetConfigFile();
+    WritePrivateProfileStringW(L"Settings", L"AutoUpdateCheck", enable ? L"1" : L"0", file.c_str());
+}
