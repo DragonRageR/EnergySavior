@@ -1,4 +1,4 @@
-#include "../../include/core/UpdateManager.hpp"
+﻿#include "../../include/core/UpdateManager.hpp"
 #include "../../include/core/AppConfig.hpp"
 #include "../../include/core/Logger.hpp"
 #include "../../include/gui/TrayManager.hpp"
@@ -16,6 +16,7 @@
 #endif
 
 void UpdateManager::Init(HWND notifyHwnd) {
+    std::lock_guard<std::mutex> lock(s_updateMutex);
     s_notifyHwnd = notifyHwnd;
     s_status = UpdateStatus::Idle;
     s_statusMessage = L"Версія: " + AppConfig::GetAppVersion();
@@ -41,7 +42,7 @@ bool UpdateManager::ParseVersion(const std::wstring& verStr, int& outYear, int& 
     std::wsmatch match;
     if (std::regex_search(verStr, match, re)) {
         outYear = std::stoi(match[1].str());
-        if (outYear < 100) outYear += 2000; // e.g. 26 -> 2026
+        if (outYear < 100) outYear += 2000;
         outMonth = std::stoi(match[2].str());
         if (match[3].matched) {
             outPatch = std::stoi(match[3].str());
@@ -66,15 +67,17 @@ bool UpdateManager::IsNewerVersion(const std::wstring& currentVer, const std::ws
 
 void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInfo&)> onComplete) {
     Logger::Info(L"UpdateManager", L"Checking for updates online...");
-    s_status = UpdateStatus::Checking;
-    s_statusMessage = L"Перевірка наявності оновлень...";
+    {
+        std::lock_guard<std::mutex> lock(s_updateMutex);
+        s_status = UpdateStatus::Checking;
+        s_statusMessage = L"Пошук оновлень...";
+    }
     if (s_notifyHwnd) PostMessage(s_notifyHwnd, WM_USER + 2, 0, 0);
 
     std::wstring remoteVer = L"";
     std::wstring releaseNotes = L"";
     std::wstring downloadUrl = L"";
 
-    // Use WinHTTP to query GitHub API or raw version manifest
     HINTERNET hSession = WinHttpOpen(L"EnergySavior-Updater/1.0",
                                      WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
@@ -83,7 +86,6 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
     bool checkOk = false;
 
     if (hSession) {
-        // Query official repository
         HINTERNET hConnect = WinHttpConnect(hSession, L"raw.githubusercontent.com",
                                             INTERNET_DEFAULT_HTTPS_PORT, 0);
         if (hConnect) {
@@ -105,7 +107,6 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
                     }
 
                     if (!responseBody.empty()) {
-                        // Simple JSON parser for version, url, notes
                         auto extractVal = [&](const std::string& key) -> std::wstring {
                             std::string search = "\"" + key + "\":";
                             size_t pos = responseBody.find(search);
@@ -129,8 +130,11 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
 
                         remoteVer = extractVal("version");
                         downloadUrl = extractVal("download_url");
-                        releaseNotes = extractVal("notes");
-                        if (!remoteVer.empty()) checkOk = true;
+                        releaseNotes = extractVal("release_notes");
+
+                        if (!remoteVer.empty()) {
+                            checkOk = true;
+                        }
                     }
                 }
                 WinHttpCloseHandle(hRequest);
@@ -140,51 +144,67 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
         WinHttpCloseHandle(hSession);
     }
 
-    if (!checkOk) {
-        // Fallback / Standalone mode: repository is up-to-date with current build
-        remoteVer = AppConfig::GetAppVersion();
-        s_status = UpdateStatus::UpToDate;
-        s_statusMessage = L"[OK] Встановлено останню версію (" + AppConfig::GetAppVersion() + L")";
-        Logger::Info(L"UpdateManager", L"Оновлень не знайдено. Встановлено актуальну версію: " + AppConfig::GetAppVersion());
-    } else {
-        if (IsNewerVersion(AppConfig::GetAppVersion(), remoteVer)) {
-            s_status = UpdateStatus::UpdateAvailable;
-            s_info.latestVersion = remoteVer;
-            s_info.downloadUrl = downloadUrl;
-            s_info.releaseNotes = releaseNotes;
-            s_statusMessage = L"[!] Доступне оновлення: " + remoteVer;
-            Logger::Info(L"UpdateManager", L"Виявлено нову версію: " + remoteVer);
-            TrayManager::ShowBalloon(L"Доступне оновлення EnergySavior!", 
-                                     (L"Вийшла нова версія: " + remoteVer + L". Натисніть для оновлення.").c_str());
-        } else {
+    UpdateStatus finalStatus;
+    UpdateInfo finalInfo;
+    {
+        std::lock_guard<std::mutex> lock(s_updateMutex);
+        if (!checkOk) {
+            remoteVer = AppConfig::GetAppVersion();
             s_status = UpdateStatus::UpToDate;
-            s_statusMessage = L"[OK] Остання версія (" + AppConfig::GetAppVersion() + L")";
-            Logger::Info(L"UpdateManager", L"Встановлено найновішу версію: " + AppConfig::GetAppVersion());
+            s_statusMessage = L"[OK] Актуальна версія (" + AppConfig::GetAppVersion() + L")";
+            Logger::Info(L"UpdateManager", L"Актуальна версія збірки: " + AppConfig::GetAppVersion());
+        } else {
+            if (IsNewerVersion(AppConfig::GetAppVersion(), remoteVer)) {
+                s_status = UpdateStatus::UpdateAvailable;
+                s_info.latestVersion = remoteVer;
+                s_info.downloadUrl = downloadUrl;
+                s_info.releaseNotes = releaseNotes;
+                s_statusMessage = L"[!] Доступне оновлення: " + remoteVer;
+                Logger::Info(L"UpdateManager", L"Знайдено нову версію: " + remoteVer);
+            } else {
+                s_status = UpdateStatus::UpToDate;
+                s_statusMessage = L"[OK] Актуальна версія (" + AppConfig::GetAppVersion() + L")";
+                Logger::Info(L"UpdateManager", L"Встановлена найновіша версія: " + AppConfig::GetAppVersion());
+            }
         }
+        finalStatus = s_status;
+        finalInfo = s_info;
     }
 
     if (s_notifyHwnd) PostMessage(s_notifyHwnd, WM_USER + 2, 0, 0);
-    if (onComplete) onComplete(s_status, s_info);
+    if (onComplete) onComplete(finalStatus, finalInfo);
 }
 
 void UpdateManager::CheckForUpdatesAsync(std::function<void(UpdateStatus, const UpdateInfo&)> onComplete) {
-    if (s_status == UpdateStatus::Checking || s_status == UpdateStatus::Downloading) return;
+    bool expected = false;
+    if (!s_isChecking.compare_exchange_strong(expected, true)) {
+        return; // Already checking
+    }
+
     std::thread([onComplete]() {
         WorkerCheck(onComplete);
+        s_isChecking.store(false);
     }).detach();
 }
 
 void UpdateManager::WorkerDownload(std::function<void(bool, const std::wstring&)> onComplete) {
-    if (s_info.downloadUrl.empty()) {
-        s_status = UpdateStatus::Failed;
-        s_statusMessage = L"Помилка: відсутнє посилання для завантаження";
-        if (onComplete) onComplete(false, s_statusMessage);
-        return;
+    std::wstring dlUrl;
+    std::wstring ver;
+    {
+        std::lock_guard<std::mutex> lock(s_updateMutex);
+        dlUrl = s_info.downloadUrl;
+        ver = s_info.latestVersion;
+        if (dlUrl.empty()) {
+            s_status = UpdateStatus::Failed;
+            s_statusMessage = L"Помилка: не знайдено посилання";
+            if (onComplete) onComplete(false, s_statusMessage);
+            return;
+        }
+        s_status = UpdateStatus::Downloading;
+        s_statusMessage = L"Завантаження оновлення " + ver + L"...";
     }
 
-    s_status = UpdateStatus::Downloading;
-    s_statusMessage = L"Завантаження оновлення " + s_info.latestVersion + L"...";
-    Logger::Info(L"UpdateManager", L"Downloading update from " + s_info.downloadUrl);
+    Logger::Info(L"UpdateManager", L"Downloading update from " + dlUrl);
     if (s_notifyHwnd) PostMessage(s_notifyHwnd, WM_USER + 2, 0, 0);
 
     wchar_t appData[MAX_PATH] = { 0 };
@@ -195,30 +215,39 @@ void UpdateManager::WorkerDownload(std::function<void(bool, const std::wstring&)
     }
     std::wstring updateExe = updateDir + L"\\EnergySavior_update.exe";
 
-    // Download using WinHTTP or URLDownloadToFile
-    URLDownloadToFileW(NULL, s_info.downloadUrl.c_str(), updateExe.c_str(), 0, NULL);
+    URLDownloadToFileW(NULL, dlUrl.c_str(), updateExe.c_str(), 0, NULL);
 
-    // Verify downloaded file
     DWORD attr = GetFileAttributesW(updateExe.c_str());
-    if (attr != INVALID_FILE_ATTRIBUTES) {
-        s_status = UpdateStatus::ReadyToRestart;
-        s_statusMessage = L"[OK] Оновлення завантажено. Натисніть для перезапуску!";
-        Logger::Info(L"UpdateManager", L"Update successfully downloaded to " + updateExe);
-        if (onComplete) onComplete(true, updateExe);
-    } else {
-        s_status = UpdateStatus::Failed;
-        s_statusMessage = L"Не вдалося завантажити оновлення";
-        Logger::Error(L"UpdateManager", L"Failed to download update binary");
-        if (onComplete) onComplete(false, s_statusMessage);
+    bool ok = (attr != INVALID_FILE_ATTRIBUTES);
+    std::wstring resMsg;
+    {
+        std::lock_guard<std::mutex> lock(s_updateMutex);
+        if (ok) {
+            s_status = UpdateStatus::ReadyToRestart;
+            s_statusMessage = L"[OK] Оновлення завантажено. Перезапустіть для оновлення!";
+            resMsg = updateExe;
+            Logger::Info(L"UpdateManager", L"Update successfully downloaded to " + updateExe);
+        } else {
+            s_status = UpdateStatus::Failed;
+            s_statusMessage = L"Не вдалося завантажити файл";
+            resMsg = s_statusMessage;
+            Logger::Error(L"UpdateManager", L"Failed to download update binary");
+        }
     }
 
     if (s_notifyHwnd) PostMessage(s_notifyHwnd, WM_USER + 2, 0, 0);
+    if (onComplete) onComplete(ok, resMsg);
 }
 
 void UpdateManager::DownloadAndInstallAsync(std::function<void(bool, const std::wstring&)> onComplete) {
-    if (s_status == UpdateStatus::Downloading) return;
+    bool expected = false;
+    if (!s_isDownloading.compare_exchange_strong(expected, true)) {
+        return;
+    }
+
     std::thread([onComplete]() {
         WorkerDownload(onComplete);
+        s_isDownloading.store(false);
     }).detach();
 }
 
@@ -259,11 +288,6 @@ bool UpdateManager::PerformSelfUpdateAndRestart(const std::wstring& updateFilePa
     ss << "    timeout /t 1 /nobreak >nul\n";
     ss << "    goto :WAIT_PROCESS\n";
     ss << ")\n";
-    ss << "tasklist | find /i \"EnergyControl.exe\" >nul\n";
-    ss << "if not errorlevel 1 (\n";
-    ss << "    timeout /t 1 /nobreak >nul\n";
-    ss << "    goto :WAIT_PROCESS\n";
-    ss << ")\n";
     ss << "copy /y \"" << sUpdatePath << "\" \"" << sCurrentExe << "\" >nul\n";
     ss << "start \"\" \"" << sCurrentExe << "\"\n";
     ss << "del \"" << sUpdatePath << "\" 2>nul\n";
@@ -288,26 +312,28 @@ bool UpdateManager::PerformSelfUpdateAndRestart(const std::wstring& updateFilePa
 }
 
 UpdateStatus UpdateManager::GetStatus() {
-    return s_status;
+    return s_status.load();
 }
 
 UpdateInfo UpdateManager::GetInfo() {
+    std::lock_guard<std::mutex> lock(s_updateMutex);
     return s_info;
 }
 
 std::wstring UpdateManager::GetStatusMessage() {
+    std::lock_guard<std::mutex> lock(s_updateMutex);
     return s_statusMessage;
 }
 
 std::wstring UpdateManager::GetStatusDisplayString() {
+    std::lock_guard<std::mutex> lock(s_updateMutex);
     switch (s_status.load()) {
         case UpdateStatus::Checking:        return L"[~] Перевірка...";
-        case UpdateStatus::UpdateAvailable: return L"[+] Доступно оновлення!";
+        case UpdateStatus::UpdateAvailable: return L"[+] Доступне оновлення!";
         case UpdateStatus::Downloading:     return L"[>] Завантаження...";
-        case UpdateStatus::ReadyToRestart:  return L"[!] Перезапустити";
-        case UpdateStatus::Failed:          return L"[X] Помилка зв'язку";
+        case UpdateStatus::ReadyToRestart:  return L"[!] Перезапуск";
+        case UpdateStatus::Failed:          return L"[X] Помилка мережі";
         case UpdateStatus::UpToDate:
         default:                            return L"[OK] " + AppConfig::GetAppVersion();
     }
 }
-

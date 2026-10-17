@@ -1,4 +1,4 @@
-#include "../../include/core/CrashHandler.hpp"
+﻿#include "../../include/core/CrashHandler.hpp"
 #include "../../include/core/Logger.hpp"
 #include "../../include/core/AppConfig.hpp"
 #include <shlobj.h>
@@ -22,17 +22,17 @@ static LPTOP_LEVEL_EXCEPTION_FILTER s_prevFilter = nullptr;
 
 std::wstring CrashHandler::GetExceptionDescription(DWORD code) {
     switch (code) {
-        case EXCEPTION_ACCESS_VIOLATION:         return L"EXCEPTION_ACCESS_VIOLATION (0xC0000005) — Неприпустимий доступ до пам'яті (читання/запис)";
-        case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:    return L"EXCEPTION_ARRAY_BOUNDS_EXCEEDED (0xC000008C) — Вихід за межі масиву";
-        case EXCEPTION_DATATYPE_MISALIGNMENT:    return L"EXCEPTION_DATATYPE_MISALIGNMENT (0x80000002) — Невирівняні дані в пам'яті";
-        case EXCEPTION_FLT_DIVIDE_BY_ZERO:       return L"EXCEPTION_FLT_DIVIDE_BY_ZERO (0xC000008E) — Ділення на нуль (плаваюча кома)";
-        case EXCEPTION_ILLEGAL_INSTRUCTION:      return L"EXCEPTION_ILLEGAL_INSTRUCTION (0xC000001D) — Непідтримувана інструкція процесора";
-        case EXCEPTION_IN_PAGE_ERROR:            return L"EXCEPTION_IN_PAGE_ERROR (0xC0000006) — Помилка сторінки пам'яті / диска";
-        case EXCEPTION_INT_DIVIDE_BY_ZERO:       return L"EXCEPTION_INT_DIVIDE_BY_ZERO (0xC0000094) — Цілочисельне ділення на нуль";
-        case EXCEPTION_NONCONTINUABLE_EXCEPTION: return L"EXCEPTION_NONCONTINUABLE_EXCEPTION (0xC0000025) — Невідновлюваний збій";
-        case EXCEPTION_PRIV_INSTRUCTION:         return L"EXCEPTION_PRIV_INSTRUCTION (0xC0000096) — Спроба виконання привілейованої команди";
-        case EXCEPTION_STACK_OVERFLOW:           return L"EXCEPTION_STACK_OVERFLOW (0xC00000FD) — Переповнення стеку викликів";
-        case 0xE06D7363:                         return L"MSVC_CPP_EXCEPTION (0xE06D7363) — Неперехоплений C++ Exception (throw)";
+        case EXCEPTION_ACCESS_VIOLATION:         return L"EXCEPTION_ACCESS_VIOLATION (0xC0000005) - Неприпустимий доступ до пам'яті (читання/запис)";
+        case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:    return L"EXCEPTION_ARRAY_BOUNDS_EXCEEDED (0xC000008C) - Вихід за межі масиву";
+        case EXCEPTION_DATATYPE_MISALIGNMENT:    return L"EXCEPTION_DATATYPE_MISALIGNMENT (0x80000002) - Порушення вирівнювання даних у пам'яті";
+        case EXCEPTION_FLT_DIVIDE_BY_ZERO:       return L"EXCEPTION_FLT_DIVIDE_BY_ZERO (0xC000008E) - Ділення на нуль (плаваюча кома)";
+        case EXCEPTION_ILLEGAL_INSTRUCTION:      return L"EXCEPTION_ILLEGAL_INSTRUCTION (0xC000001D) - Спроба виконання неприпустимої інструкції ЦП";
+        case EXCEPTION_IN_PAGE_ERROR:            return L"EXCEPTION_IN_PAGE_ERROR (0xC0000006) - Помилка підкачування сторінки пам'яті з диска";
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:       return L"EXCEPTION_INT_DIVIDE_BY_ZERO (0xC0000094) - Цілочисельне ділення на нуль";
+        case EXCEPTION_NONCONTINUABLE_EXCEPTION: return L"EXCEPTION_NONCONTINUABLE_EXCEPTION (0xC0000025) - Спроба продовження після невідновного винятку";
+        case EXCEPTION_PRIV_INSTRUCTION:         return L"EXCEPTION_PRIV_INSTRUCTION (0xC0000096) - Спроба виконання привілейованої інструкції";
+        case EXCEPTION_STACK_OVERFLOW:           return L"EXCEPTION_STACK_OVERFLOW (0xC00000FD) - Переповнення стека викликів";
+        case 0xE06D7363:                         return L"MSVC_CPP_EXCEPTION (0xE06D7363) - Неперехоплений C++ Exception (throw)";
         default: {
             wchar_t hex[32];
             swprintf_s(hex, L"UNKNOWN_EXCEPTION (0x%08X)", code);
@@ -59,8 +59,8 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
     std::wstring dumpPath   = dir + L"\\crash_dump_" + timeBuf + L".dmp";
 
     // 1. Write MiniDump if DbgHelp is available
-    HMODULE hDbgHelp = LoadLibraryW(L"dbghelp.dll");
     bool dumpCreated = false;
+    HMODULE hDbgHelp = LoadLibraryW(L"dbghelp.dll");
     if (hDbgHelp) {
         MiniDumpWriteDumpFn pDump = (MiniDumpWriteDumpFn)GetProcAddress(hDbgHelp, "MiniDumpWriteDump");
         if (pDump) {
@@ -71,8 +71,8 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
                 mei.ExceptionPointers = ep;
                 mei.ClientPointers = FALSE;
 
-                dumpCreated = (pDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
-                                     MiniDumpNormal, ep ? &mei : NULL, NULL, NULL) != FALSE);
+                MINIDUMP_TYPE flags = (MINIDUMP_TYPE)(MiniDumpWithDataSegs | MiniDumpWithHandleData | MiniDumpWithUnloadedModules | MiniDumpWithProcessThreadData);
+                dumpCreated = (pDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, flags, ep ? &mei : NULL, NULL, NULL) == TRUE);
                 CloseHandle(hFile);
             }
         }
@@ -82,26 +82,26 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
     // 2. Format detailed text report
     std::wstringstream report;
     report << L"======================================================================\n";
-    report << L"                       ENERGYSAVIOR — CRASH REPORT                    \n";
+    report << L"       ENERGYSAVIOR CRASH REPORT (АВАРІЙНИЙ ЗВІТ ПРО ПОМИЛКУ)         \n";
     report << L"======================================================================\n\n";
 
-    report << L"Версія програми:      " << AppConfig::GetAppVersion() << L" (" << AppConfig::GetAppStage() << L")\n";
-    report << L"Час збою:             " << timeBuf << L"\n";
-    report << L"PID процесу:          " << GetCurrentProcessId() << L"\n";
-    report << L"TID потоку:           " << GetCurrentThreadId() << L"\n";
-    report << L"Права адміністратора: " << (AppConfig::IsElevated() ? L"ТАК (Elevated)" : L"НІ (Standard User)") << L"\n\n";
+    report << L"Версія програми:   " << L"alpha-2026.10\n";
+    report << L"Дата та час:       " << timeBuf << L"\n";
+    report << L"PID процесу:       " << GetCurrentProcessId() << L"\n";
+    report << L"TID потоку:        " << GetCurrentThreadId() << L"\n";
+    report << L"Права доступу:     " << (AppConfig::IsElevated() ? L"Адміністратор (Elevated)" : L"Користувач (Standard User)") << L"\n\n";
 
     if (customReason && *customReason) {
-        report << L"Причина збою (User/Runtime): " << customReason << L"\n\n";
+        report << L"Причина аварії (User/Runtime): " << customReason << L"\n\n";
     }
 
     if (ep && ep->ExceptionRecord) {
         DWORD code = ep->ExceptionRecord->ExceptionCode;
         void* addr = ep->ExceptionRecord->ExceptionAddress;
 
-        report << L"--- [ ДЕТАЛІ СИСТЕМНОГО ЗБОЮ ] ---\n";
-        report << L"Код винятку:         " << GetExceptionDescription(code) << L"\n";
-        report << L"Адреса інструкції:   0x" << std::hex << (uintptr_t)addr << std::dec << L"\n";
+        report << L"--- [ ІНФОРМАЦІЯ ПРО ВИНЯТОК ] ---\n";
+        report << L"Код помилки:       " << GetExceptionDescription(code) << L"\n";
+        report << L"Адреса збою:       0x" << std::hex << (uintptr_t)addr << std::dec << L"\n";
 
         // Query module of faulting address
         HMODULE hMod = NULL;
@@ -110,14 +110,14 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
             wchar_t modName[MAX_PATH] = { 0 };
             GetModuleFileNameW(hMod, modName, MAX_PATH);
             uintptr_t offset = (uintptr_t)addr - (uintptr_t)hMod;
-            report << L"Модуль збою:         " << modName << L" (+0x" << std::hex << offset << std::dec << L")\n";
+            report << L"Модуль збою:       " << modName << L" (+0x" << std::hex << offset << std::dec << L")\n";
         }
 
         if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
             ULONG_PTR op = ep->ExceptionRecord->ExceptionInformation[0];
             ULONG_PTR targetAddr = ep->ExceptionRecord->ExceptionInformation[1];
-            report << L"Операція доступу:    " << (op == 0 ? L"Спроба ЧИТАННЯ з" : (op == 1 ? L"Спроба ЗАПИСУ в" : L"Спроба ВИКОНАННЯ за адресою"))
-                   << L" 0x" << std::hex << targetAddr << std::dec << L"\n";
+            report << L"Тип операції:      " << (op == 0 ? L"Спроба читання пам'яті" : (op == 1 ? L"Спроба запису в пам'ять" : L"Спроба виконання даних"))
+                   << L" за адресою 0x" << std::hex << targetAddr << std::dec << L"\n";
         }
         report << L"\n";
 
@@ -165,15 +165,15 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
         report << L"\n";
     }
 
-    report << L"--- [ ФАЙЛИ ЗВІТУ ТА ДАМПУ ] ---\n";
+    report << L"--- [ СТВОРЕНІ ДІАГНОСТИЧНІ ФАЙЛИ ] ---\n";
     report << L"Текстовий звіт: " << reportPath << L"\n";
     if (dumpCreated) {
         report << L"Дамп пам'яті (Minidump): " << dumpPath << L" (може бути відкритий у WinDbg / Visual Studio)\n";
     }
-    report << L"Основний журнал подій: " << Logger::GetLogFilePath() << L"\n\n";
+    report << L"Основний журнал програми: " << Logger::GetLogFilePath() << L"\n\n";
 
     report << L"======================================================================\n";
-    report << L"Будь ласка, прикріпіть цей файл або його зміст при відкритті Issue на GitHub!\n";
+    report << L"Будь ласка, прикріпіть цей файл або його вміст до звіту про помилку Issue на GitHub!\n";
     report << L"======================================================================\n";
 
     // 3. Save to report file
@@ -193,11 +193,11 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
     Logger::Error(L"CRASH", L"CRITICAL APPLICATION CRASH OCCURRED! Report: " + reportPath);
 
     // 5. Native User Error Dialog (suppressed if --silent is passed)
-    std::wstring msgBoxText = L"[!] СТАВСЯ КРИТИЧНИЙ ЗБІЙ ПРОГРАМИ (CRASH)\n\n"
-                              L"EnergySavior зіткнувся з помилкою та не може продовжувати роботу.\n\n"
-                              L"Звіт про помилку та дамп пам'яті збережено:\n" +
+    std::wstring msgBoxText = L"[!] КРИТИЧНИЙ ЗБІЙ ПРОГРАМИ (CRASH)\n\n"
+                              L"EnergySavior зіткнувся з критичною помилкою та не може продовжувати роботу.\n\n"
+                              L"Аварійний звіт та дамп пам'яті збережено:\n" +
                               reportPath + L"\n\n"
-                              L"Натисніть 'ОК', щоб відкрити папку зі звітом для надсилання розробнику.";
+                              L"Натисніть 'OK', щоб відкрити папку зі звітом для надсилання розробнику.";
 
     bool isSilent = (wcsstr(GetCommandLineW(), L"--silent") != nullptr);
     if (!isSilent) {
@@ -226,7 +226,7 @@ static void TerminateHandler() {
         if (wlen > 0) {
             std::wstring we(wlen, 0);
             MultiByteToWideChar(CP_UTF8, 0, e.what(), -1, &we[0], wlen);
-            reason += L" Повідомлення: " + we;
+            reason += L" Опис: " + we;
         }
     } catch (...) {
         reason += L" Невідомий тип винятку (не std::exception).";

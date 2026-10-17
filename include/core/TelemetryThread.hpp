@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <mutex>
 #include <atomic>
 #include <string>
+#include <vector>
 #include "../hardware/BatteryController.hpp"
 #include "../hardware/DisplayController.hpp"
 #include "../hardware/CpuController.hpp"
@@ -17,6 +18,10 @@ struct TelemetryData {
     int brightness = 50;
     float displayWatts = 6.0f;
     CpuBoostMode cpuBoost = CpuBoostMode::Aggressive;
+    float cpuUsagePercent = 0.0f;
+    float cpuWatts = 8.0f;
+    std::wstring iGpuName = L"Intel(R) UHD Graphics";
+    float iGpuWatts = 1.5f;
     GpuSnapshot gpu;
     ThermalMode thermalMode = ThermalMode::Balance;
     GpuMuxMode muxMode = GpuMuxMode::Hybrid;
@@ -24,6 +29,8 @@ struct TelemetryData {
     WindowsPowerStatus winPower;
     SystemDetails system;
     std::vector<TopProcessInfo> topProcesses;
+    std::vector<TopProcessInfo> cpuProcesses;
+    std::vector<TopProcessInfo> iGpuProcesses;
     bool isEcoMode = false;
     bool isElevated = false;
 };
@@ -62,4 +69,3 @@ public:
     static void MarkNotificationSent();
     static void RefreshPowerStatus();
 };
-

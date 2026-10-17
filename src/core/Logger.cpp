@@ -1,4 +1,4 @@
-#include "../../include/core/Logger.hpp"
+﻿#include "../../include/core/Logger.hpp"
 #include <shlobj.h>
 #include <fstream>
 #include <sstream>

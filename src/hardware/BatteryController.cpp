@@ -29,9 +29,14 @@ BatterySnapshot BatteryController::Query() {
 
     DWORD cbRequired = 0;
     SetupDiGetDeviceInterfaceDetail(hdev, &did, 0, 0, &cbRequired, 0);
+    if (cbRequired < sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA)) {
+        SetupDiDestroyDeviceInfoList(hdev);
+        return info;
+    }
+
     std::vector<BYTE> buf(cbRequired);
     PSP_DEVICE_INTERFACE_DETAIL_DATA pdid = (PSP_DEVICE_INTERFACE_DETAIL_DATA)buf.data();
-    pdid->cbSize = sizeof(*pdid);
+    pdid->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
     if (!SetupDiGetDeviceInterfaceDetail(hdev, &did, pdid, cbRequired, &cbRequired, 0)) {
         SetupDiDestroyDeviceInfoList(hdev);

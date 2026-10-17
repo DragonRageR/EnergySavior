@@ -1,4 +1,4 @@
-#include "../../include/hardware/CpuController.hpp"
+﻿#include "../../include/hardware/CpuController.hpp"
 #include <powrprof.h>
 
 static const GUID GUID_PROC_SETTINGS = { 0x54533251, 0x82be, 0x4824, { 0x96, 0xc1, 0x47, 0xb6, 0x0b, 0x74, 0x0d, 0x00 } };

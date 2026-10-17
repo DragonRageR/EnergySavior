@@ -1,5 +1,31 @@
-#include "../../include/hardware/DisplayController.hpp"
+﻿#include "../../include/hardware/DisplayController.hpp"
 #include <set>
+#include <wbemidl.h>
+
+#ifndef IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS
+#define IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS CTL_CODE(FILE_DEVICE_VIDEO, 0x126, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+#ifndef IOCTL_VIDEO_SET_DISPLAY_BRIGHTNESS
+#define IOCTL_VIDEO_SET_DISPLAY_BRIGHTNESS   CTL_CODE(FILE_DEVICE_VIDEO, 0x127, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#endif
+
+typedef struct _LOCAL_DISPLAY_BRIGHTNESS {
+    UCHAR ucDisplayPolicy;
+    UCHAR ucACBrightness;
+    UCHAR ucDCBrightness;
+} LOCAL_DISPLAY_BRIGHTNESS;
+
+struct ComInitScope {
+    HRESULT hr;
+    ComInitScope() {
+        hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    }
+    ~ComInitScope() {
+        if (hr == S_OK) {
+            CoUninitialize();
+        }
+    }
+};
 
 DWORD DisplayController::GetCurrentRefreshRate() {
     DEVMODE dm = { 0 };
@@ -52,24 +78,9 @@ bool DisplayController::SetRefreshRate(DWORD hz) {
     return (ChangeDisplaySettings(&dm, 0) == DISP_CHANGE_SUCCESSFUL);
 }
 
-#include <wbemidl.h>
-
-#ifndef IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS
-#define IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS CTL_CODE(FILE_DEVICE_VIDEO, 0x126, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#endif
-#ifndef IOCTL_VIDEO_SET_DISPLAY_BRIGHTNESS
-#define IOCTL_VIDEO_SET_DISPLAY_BRIGHTNESS   CTL_CODE(FILE_DEVICE_VIDEO, 0x127, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#endif
-
-typedef struct _LOCAL_DISPLAY_BRIGHTNESS {
-    UCHAR ucDisplayPolicy;
-    UCHAR ucACBrightness;
-    UCHAR ucDCBrightness;
-} LOCAL_DISPLAY_BRIGHTNESS;
-
 int DisplayController::GetBrightness() {
-    // 1. Native WMI WmiMonitorBrightness query (real live brightness on modern Win 10/11 laptops)
-    CoInitializeEx(0, COINIT_MULTITHREADED);
+    ComInitScope comScope;
+
     IWbemLocator* pLoc = NULL;
     HRESULT hr = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLoc);
     if (SUCCEEDED(hr) && pLoc) {
@@ -112,7 +123,7 @@ int DisplayController::GetBrightness() {
         pLoc->Release();
     }
 
-    // 2. Fallback to IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS
+    // Fallback to IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS
     HANDLE hLcd = CreateFileW(L"\\\\.\\LCD", GENERIC_READ, 
                               FILE_SHARE_READ | FILE_SHARE_WRITE, 
                               NULL, OPEN_EXISTING, 0, NULL);
@@ -133,9 +144,8 @@ bool DisplayController::SetBrightness(int percent) {
     if (percent > 100) percent = 100;
 
     bool success = false;
+    ComInitScope comScope;
 
-    // 1. Native WMI WmiMonitorBrightnessMethods (Windows 10/11)
-    CoInitializeEx(0, COINIT_MULTITHREADED);
     IWbemLocator* pLoc = NULL;
     HRESULT hr = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLoc);
     if (SUCCEEDED(hr) && pLoc) {
@@ -212,7 +222,7 @@ bool DisplayController::SetBrightness(int percent) {
 
     if (success) return true;
 
-    // 2. Fallback to IOCTL_VIDEO_SET_DISPLAY_BRIGHTNESS
+    // Fallback to IOCTL_VIDEO_SET_DISPLAY_BRIGHTNESS
     HANDLE hLcd = CreateFileW(L"\\\\.\\LCD", GENERIC_READ | GENERIC_WRITE, 
                               FILE_SHARE_READ | FILE_SHARE_WRITE, 
                               NULL, OPEN_EXISTING, 0, NULL);
@@ -238,4 +248,3 @@ float DisplayController::CalculateDisplayWatts(DWORD hz, int brightnessPercent) 
     float backlight = 0.5f + (bClamped / 100.0f) * 4.5f;
     return basePanel + backlight;
 }
-

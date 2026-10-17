@@ -1,4 +1,4 @@
-#include "../../include/hardware/LenovoWmi.hpp"
+﻿#include "../../include/hardware/LenovoWmi.hpp"
 #include "../../include/core/Logger.hpp"
 #include <wincrypt.h>
 #include <thread>

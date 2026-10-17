@@ -1,10 +1,12 @@
-#include "../../include/core/TelemetryThread.hpp"
+﻿#include "../../include/core/TelemetryThread.hpp"
 #include "../../include/core/AppConfig.hpp"
 #include "../../include/core/Logger.hpp"
 #include "../../include/gui/TrayManager.hpp"
 #include "../../include/hardware/WindowsPowerController.hpp"
+#include "../../include/hardware/GpuController.hpp"
 #include <thread>
 #include <algorithm>
+#include <objbase.h>
 
 void TelemetryThread::Start(HWND notifyHwnd) {
     if (s_running) return;
@@ -13,20 +15,24 @@ void TelemetryThread::Start(HWND notifyHwnd) {
 
     Logger::Init();
 
-    // Очистити історію споживання від попередньої сесії
-    { std::lock_guard<std::mutex> lock(s_mutex); s_powerHistory.clear(); }
+    // Очищуємо історію потужності при кожному новому старті
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        s_powerHistory.clear();
+    }
 
-    // Початкова апаратна діагностика
+    // Початкове опитування системи
     {
         std::lock_guard<std::mutex> lock(s_mutex);
         s_data.system = SystemInfo::Detect();
+        s_data.iGpuName = s_data.system.iGpuName;
         s_data.isElevated = AppConfig::IsElevated();
         s_data.winPower = WindowsPowerController::Query();
 
-        Logger::Info(L"TelemetryThread", L"Телеметричний потік успішно запущено. Права Адміністратора: " + 
+        Logger::Info(L"TelemetryThread", L"Фоновий потік запущено. Права адміністратора: " + 
                      std::wstring(s_data.isElevated ? L"ТАК" : L"НІ"));
-        Logger::Info(L"SystemInfo", L"Виявлено пристрій: " + s_data.system.manufacturer + L" " + s_data.system.model + 
-                     L" | BIOS: " + s_data.system.biosVersion + L" | CPU: " + s_data.system.cpuName);
+        Logger::Info(L"SystemInfo", L"Виробник: " + s_data.system.manufacturer + L" " + s_data.system.model + 
+                     L" | CPU: " + s_data.system.cpuName + L" | iGPU: " + s_data.iGpuName);
     }
 
     std::thread([notifyHwnd]() {
@@ -36,7 +42,7 @@ void TelemetryThread::Start(HWND notifyHwnd) {
 
 void TelemetryThread::Stop() {
     s_running = false;
-    Logger::Info(L"TelemetryThread", L"Зупинка телеметричного потоку");
+    Logger::Info(L"TelemetryThread", L"Потік зупиняється");
 }
 
 TelemetryData TelemetryThread::GetData() {
@@ -57,7 +63,7 @@ void TelemetryThread::ApplyEcoProfile() {
     if (s_isSwitching) return;
     s_isSwitching = true;
 
-    Logger::Info(L"Профіль", L"Застосування ЕКО профілю: 60 Hz, Boost Вимкнено, Вент Quiet, Windows Energy Saver");
+    Logger::Info(L"Автоматика", L"Перемикання в ЕКО режим: 60 Hz, Boost вимкнено, профіль Quiet, Windows Energy Saver");
 
     DisplayController::SetRefreshRate(60);
     CpuController::ApplyEcoProfile();
@@ -74,7 +80,7 @@ void TelemetryThread::ApplyEcoProfile() {
     }
 
     if (CanNotify()) {
-        TrayManager::ShowBalloon(L"EnergySavior — Еко-режим", L"Увімкнено максимальне енергозбереження:\n• Екран: 60 Hz\n• CPU Boost: Вимкнено\n• Режим Fn+Q: Quiet (Тихий)\n• Windows: Енергозбереження");
+        TrayManager::ShowBalloon(L"EnergySavior • ЕКО РЕЖИМ", L"Увімкнено максимальне енергозбереження:\n• Екран: 60 Hz\n• CPU Boost: Вимкнено\n• Охолодження: Quiet (Тихий)\n• Windows: Енергозбереження");
         MarkNotificationSent();
     }
 
@@ -85,7 +91,7 @@ void TelemetryThread::ApplyPerformanceProfile() {
     if (s_isSwitching) return;
     s_isSwitching = true;
 
-    Logger::Info(L"Профіль", L"Застосування МАКС продуктивності: 144 Hz, Boost Увімкнено, Вент Balance, Windows Збалансований");
+    Logger::Info(L"Автоматика", L"Перемикання в режим продуктивності: 144 Hz, Boost агресивний, профіль Balance, Windows збалансований");
 
     DisplayController::SetRefreshRate(144);
     CpuController::ApplyPerformanceProfile();
@@ -102,7 +108,7 @@ void TelemetryThread::ApplyPerformanceProfile() {
     }
 
     if (CanNotify()) {
-        TrayManager::ShowBalloon(L"EnergySavior — Макс. режим", L"Увімкнено максимальну продуктивність:\n• Екран: 144 Hz\n• CPU Boost: Увімкнено\n• Режим Fn+Q: Balance (Збалансований)\n• Windows: Баланс");
+        TrayManager::ShowBalloon(L"EnergySavior • МАКС. РЕЖИМ", L"Увімкнено продуктивний профіль:\n• Екран: 144 Hz\n• CPU Boost: Агресивний\n• Охолодження: Balance (Збалансований)\n• Windows: Збалансований");
         MarkNotificationSent();
     }
 
@@ -124,7 +130,7 @@ void TelemetryThread::ToggleMode() {
 }
 
 void TelemetryThread::SetRefreshRate(DWORD hz) {
-    Logger::Info(L"Дисплей", L"Встановлення частоти оновлення екрана: " + std::to_wstring(hz) + L" Hz");
+    Logger::Info(L"Дисплей", L"Встановлення частоти оновлення: " + std::to_wstring(hz) + L" Hz");
     DisplayController::SetRefreshRate(hz);
     std::lock_guard<std::mutex> lock(s_mutex);
     s_data.refreshRate = hz;
@@ -139,7 +145,7 @@ void TelemetryThread::SetCpuBoost(CpuBoostMode mode) {
 }
 
 void TelemetryThread::SetThermalMode(ThermalMode mode) {
-    Logger::Info(L"Охолодження", L"Режим вентиляторів Fn+Q змінено: " + LenovoWmi::ThermalToString(mode));
+    Logger::Info(L"Охолодження", L"Режим охолодження змінено: " + LenovoWmi::ThermalToString(mode));
     std::lock_guard<std::mutex> lock(s_mutex);
     s_data.thermalMode = mode;
 }
@@ -151,7 +157,7 @@ void TelemetryThread::SetMuxMode(GpuMuxMode mode) {
 }
 
 void TelemetryThread::SetKeyboardLight(KbdBacklight light) {
-    Logger::Info(L"Підсвітка", L"Підсвітка клавіатури встановлена: " + LenovoWmi::KbdToString(light));
+    Logger::Info(L"Клавіатура", L"Підсвічування клавіатури: " + LenovoWmi::KbdToString(light));
     std::lock_guard<std::mutex> lock(s_mutex);
     s_data.kbdLight = light;
 }
@@ -168,6 +174,8 @@ std::vector<float> TelemetryThread::GetPowerHistory(size_t maxSeconds) {
 }
 
 void TelemetryThread::WorkerLoop() {
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+
     bool lastAc = true;
     bool lastWinSaver = false;
     uint64_t loopCount = 0;
@@ -177,6 +185,9 @@ void TelemetryThread::WorkerLoop() {
     KbdBacklight kbd = LenovoWmi::GetKeyboardLight();
     int brightness = DisplayController::GetBrightness();
     std::vector<TopProcessInfo> topProcs = SystemInfo::GetTopMemoryProcesses(6);
+    std::vector<TopProcessInfo> cpuProcs;
+    std::vector<TopProcessInfo> iGpuProcs;
+    std::wstring iGpuName = SystemInfo::DetectIGpuName();
     GpuSnapshot gpu = GpuController::Query();
 
     auto nextTick = std::chrono::steady_clock::now();
@@ -192,9 +203,19 @@ void TelemetryThread::WorkerLoop() {
         }
         float dispWatts = DisplayController::CalculateDisplayWatts(hz, brightness);
         CpuBoostMode boost = CpuController::GetBoostMode(!bat.isAcOnline);
+        
+        float sysCpu = SystemInfo::GetSystemCpuUsagePercent();
+        float cpuWatts = 4.5f + (sysCpu / 100.0f) * (boost == CpuBoostMode::Aggressive ? 42.0f : 20.0f);
+
         if (loopCount % 2 == 0) {
             gpu = GpuController::Query();
+            cpuProcs = SystemInfo::GetTopCpuProcesses(12, cpuWatts);
+            std::vector<DWORD> dPids;
+            for (const auto& gp : gpu.processes) dPids.push_back(gp.pid);
+            iGpuProcs = SystemInfo::GetIGpuProcesses(dPids, 12);
+            iGpuName = SystemInfo::DetectIGpuName();
         }
+
         WindowsPowerStatus winPow = WindowsPowerController::Query();
 
         if (loopCount % 4 == 0) {
@@ -204,29 +225,31 @@ void TelemetryThread::WorkerLoop() {
             topProcs = SystemInfo::GetTopMemoryProcesses(6);
         }
 
-        // Розрахунок поточної споживаної потужності (Вт)
+        float iGpuWatts = 1.2f + (iGpuProcs.size() > 0 ? 0.8f : 0.0f);
+
+        // Розрахунок потужності (Ватт):
+        // - На батареї (DC): реальний фізичний розряд батареї від сенсора (mW -> W)
+        // - На мережі (AC 220V): детальний розрахунок суми компонентів (CPU + dGPU + Екран + iGPU + RAM/Плата)
         float curWatts = 0.0f;
-        if (bat.isDischarging && bat.dischargeRateMW > 0 && bat.dischargeRateMW < 150000) {
+        if (!bat.isAcOnline && bat.isDischarging && bat.dischargeRateMW > 0 && bat.dischargeRateMW < 150000) {
             curWatts = (float)(bat.dischargeRateMW / 1000.0);
         } else {
-            // Робота від 220V: розрахункова сума CPU/чіпсет + dGPU + екран + вентилятори
-            float cpuEst = (boost == CpuBoostMode::Aggressive) ? 14.0f : 7.0f;
             float gpuEst = (gpu.isAwake && gpu.powerWatts <= 125.0) ? (float)gpu.powerWatts : 0.0f;
-            curWatts = cpuEst + gpuEst + dispWatts + 2.5f;
+            curWatts = cpuWatts + gpuEst + dispWatts + iGpuWatts + 2.5f;
         }
 
-        // Захист від аномальних сплесків датчиків (макс. 200 Вт для ноутбука)
-        if (curWatts > 200.0f) curWatts = 25.0f;
-        if (curWatts < 3.0f)   curWatts = 3.0f;
+        // Захист від аномальних сплесків
+        if (curWatts > 150.0f) curWatts = 150.0f;
+        if (curWatts < 2.0f)   curWatts = 2.0f;
 
-        // Автоперемикач AC/DC
+        // Автоперемикання режимів при зміні живлення AC/DC
         if (AppConfig::IsAutoSwitchEnabled()) {
             if (bat.isAcOnline != lastAc) {
                 s_acStateCounter++;
                 if (s_acStateCounter >= 2) {
                     lastAc = bat.isAcOnline;
                     s_acStateCounter = 0;
-                    Logger::Info(L"Живлення", lastAc ? L"Підключено живлення від мережі 220V" : L"Перехід на живлення від акумулятора (DC)");
+                    Logger::Info(L"Автоматика", lastAc ? L"Підключено до мережі 220V" : L"Перехід на живлення від батареї (DC)");
                     if (!lastAc) {
                         ApplyEcoProfile();
                     } else {
@@ -238,11 +261,11 @@ void TelemetryThread::WorkerLoop() {
             }
         }
 
-        // Відстеження зміни Windows Energy Saver
+        // Моніторинг статусу Windows Energy Saver
         if (winPow.isEnergySaverActive != lastWinSaver) {
             lastWinSaver = winPow.isEnergySaverActive;
-            Logger::Info(L"WindowsPower", lastWinSaver ? L"Стан Windows Energy Saver: УВІМКНЕНО" 
-                                                       : L"Стан Windows Energy Saver: ВИМКНЕНО");
+            Logger::Info(L"WindowsPower", lastWinSaver ? L"Стан Windows Energy Saver: Увімкнено" 
+                                                       : L"Стан Windows Energy Saver: Вимкнено");
         }
 
         {
@@ -252,14 +275,20 @@ void TelemetryThread::WorkerLoop() {
             s_data.brightness = brightness;
             s_data.displayWatts = dispWatts;
             s_data.cpuBoost = boost;
+            s_data.cpuUsagePercent = sysCpu;
+            s_data.cpuWatts = cpuWatts;
+            s_data.iGpuName = iGpuName;
+            s_data.iGpuWatts = iGpuWatts;
             s_data.gpu = gpu;
             s_data.thermalMode = therm;
             s_data.muxMode = mux;
             s_data.kbdLight = kbd;
             s_data.winPower = winPow;
             s_data.topProcesses = topProcs;
+            s_data.cpuProcesses = cpuProcs;
+            s_data.iGpuProcesses = iGpuProcs;
 
-            // Збереження історії споживання (до 900 сек = 15 хв)
+            // Додаємо в історію потужності (до 900 сек = 15 хв)
             s_powerHistory.push_back(curWatts);
             if (s_powerHistory.size() > 900) {
                 s_powerHistory.erase(s_powerHistory.begin());
@@ -279,6 +308,8 @@ void TelemetryThread::WorkerLoop() {
             nextTick = now;
         }
     }
+
+    CoUninitialize();
 }
 
 void TelemetryThread::RefreshPowerStatus() {

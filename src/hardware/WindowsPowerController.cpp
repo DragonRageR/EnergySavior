@@ -1,4 +1,4 @@
-#include "../../include/hardware/WindowsPowerController.hpp"
+﻿#include "../../include/hardware/WindowsPowerController.hpp"
 #include "../../include/core/Logger.hpp"
 #include <powrprof.h>
 

@@ -1,4 +1,4 @@
-#include "../../include/core/AppConfig.hpp"
+﻿#include "../../include/core/AppConfig.hpp"
 #include <shlobj.h>
 
 std::wstring AppConfig::GetConfigDir() {

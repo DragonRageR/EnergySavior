@@ -1,4 +1,4 @@
-#include "TestRunner.hpp"
+﻿#include "TestRunner.hpp"
 #include "../include/core/AppConfig.hpp"
 #include "../include/core/Logger.hpp"
 #include "../include/core/CrashHandler.hpp"
@@ -10,6 +10,9 @@
 #include "../include/hardware/GpuController.hpp"
 #include "../include/hardware/DisplayController.hpp"
 #include "../include/core/SystemInfo.hpp"
+#include "../include/gui/GuiWindow.hpp"
+#include "../include/gui/TrayManager.hpp"
+
 
 #include <fstream>
 
@@ -267,7 +270,178 @@ TEST_CASE(GpuController_SafeTerminationChecks) {
     ASSERT_FALSE(GpuController::TerminateProcessByPid(GetCurrentProcessId()));
 }
 
+
+// ======================================================================
+// 11. UI Text, Symbols, and Localization Integrity Tests
+// ======================================================================
+TEST_CASE(Ui_GuiButtonsAndSymbolsIntegrity) {
+    GuiWindow::InitButtons();
+    const auto& buttons = GuiWindow::GetButtons();
+    ASSERT_TRUE(!buttons.empty());
+
+    bool foundMin = false;
+    bool foundClose = false;
+    bool foundUpdate = false;
+    bool foundEco = false;
+    bool foundMax = false;
+    bool foundTabDash = false;
+    bool foundTabGraphs = false;
+    bool foundTabCpu = false;
+    bool foundTabIGpu = false;
+    bool foundTabDGpu = false;
+
+    for (const auto& btn : buttons) {
+        // No button text should contain replacement character \uFFFD or mojibake signatures
+        for (wchar_t ch : btn.text) {
+            ASSERT_TRUE(ch != 0xFFFD);
+        }
+        // Ensure no CP1251 double-encoded characters
+        ASSERT_TRUE(btn.text.find(L"Р—") == std::wstring::npos);
+        ASSERT_TRUE(btn.text.find(L"вЂ") == std::wstring::npos);
+        ASSERT_TRUE(btn.text.find(L"вњ") == std::wstring::npos);
+
+        if (btn.id == 16) {
+            foundMin = true;
+            ASSERT_TRUE(btn.text == L"—");
+        } else if (btn.id == 17) {
+            foundClose = true;
+            ASSERT_TRUE(btn.text == L"✕");
+        } else if (btn.id == 20) {
+            foundUpdate = true;
+            ASSERT_TRUE(btn.text.find(L"Оновлення") != std::wstring::npos);
+        } else if (btn.id == 1) {
+            foundEco = true;
+            ASSERT_TRUE(btn.text.find(L"ECO") != std::wstring::npos);
+            ASSERT_TRUE(btn.text.find(L"60Hz") != std::wstring::npos);
+        } else if (btn.id == 19) {
+            foundMax = true;
+            ASSERT_TRUE(btn.text.find(L"MAX") != std::wstring::npos);
+            ASSERT_TRUE(btn.text.find(L"144Hz") != std::wstring::npos);
+        } else if (btn.id == 100) {
+            foundTabDash = true;
+            ASSERT_TRUE(btn.text.find(L"Головна") != std::wstring::npos);
+            ASSERT_TRUE(btn.text.find(L"⚡") != std::wstring::npos);
+        } else if (btn.id == 101) {
+            foundTabGraphs = true;
+            ASSERT_TRUE(btn.text.find(L"Графіки") != std::wstring::npos);
+            ASSERT_TRUE(btn.text.find(L"◈") != std::wstring::npos);
+        } else if (btn.id == 105) {
+            foundTabCpu = true;
+            ASSERT_TRUE(btn.text.find(L"Процеси CPU") != std::wstring::npos);
+            ASSERT_TRUE(btn.text.find(L"■") != std::wstring::npos);
+        } else if (btn.id == 106) {
+            foundTabIGpu = true;
+            ASSERT_TRUE(btn.text.find(L"Процеси iGPU") != std::wstring::npos);
+            ASSERT_TRUE(btn.text.find(L"◇") != std::wstring::npos);
+        } else if (btn.id == 102) {
+            foundTabDGpu = true;
+            ASSERT_TRUE(btn.text.find(L"Графіка dGPU") != std::wstring::npos);
+            ASSERT_TRUE(btn.text.find(L"▲") != std::wstring::npos);
+        }
+    }
+
+    ASSERT_TRUE(foundMin);
+    ASSERT_TRUE(foundClose);
+    ASSERT_TRUE(foundUpdate);
+    ASSERT_TRUE(foundEco);
+    ASSERT_TRUE(foundMax);
+    ASSERT_TRUE(foundTabDash);
+    ASSERT_TRUE(foundTabGraphs);
+    ASSERT_TRUE(foundTabCpu);
+    ASSERT_TRUE(foundTabIGpu);
+    ASSERT_TRUE(foundTabDGpu);
+}
+
+TEST_CASE(SystemInfo_CpuAndIGpuProcesses) {
+    std::wstring igpu = SystemInfo::DetectIGpuName();
+    ASSERT_TRUE(!igpu.empty());
+
+    auto cpuProcs = SystemInfo::GetTopCpuProcesses(5, 15.0f);
+    ASSERT_TRUE(!cpuProcs.empty());
+    for (const auto& p : cpuProcs) {
+        ASSERT_TRUE(p.pid > 0);
+        ASSERT_TRUE(!p.name.empty());
+    }
+
+    std::vector<DWORD> dPids;
+    auto igpuProcs = SystemInfo::GetIGpuProcesses(dPids, 5);
+    ASSERT_TRUE(!igpuProcs.empty());
+    for (const auto& p : igpuProcs) {
+        ASSERT_TRUE(p.pid > 0);
+        ASSERT_TRUE(!p.name.empty());
+        ASSERT_TRUE(!p.role.empty());
+    }
+}
+
+TEST_CASE(Ui_HardwareStringsLocalizationIntegrity) {
+    // 1. CPU Boost
+    ASSERT_TRUE(CpuController::ToString(CpuBoostMode::Disabled) == L"Вимкнено (~2.4 GHz)");
+    ASSERT_TRUE(CpuController::ToString(CpuBoostMode::Enabled) == L"Увімкнено (Стандартний)");
+    ASSERT_TRUE(CpuController::ToString(CpuBoostMode::Aggressive) == L"Агресивний (до 4.4 GHz)");
+    ASSERT_TRUE(CpuController::ToString(CpuBoostMode::Efficient) == L"Ефективний");
+
+    // 2. Windows Power
+    ASSERT_TRUE(WindowsPowerController::ModeToString(WindowsPowerMode::PowerEfficiency) == L"Енергоефективність");
+    ASSERT_TRUE(WindowsPowerController::ModeToString(WindowsPowerMode::Balanced) == L"Збалансований");
+    ASSERT_TRUE(WindowsPowerController::ModeToString(WindowsPowerMode::BestPerformance) == L"Найвища продуктивність");
+
+    // 3. Lenovo Thermal Mode
+    ASSERT_TRUE(LenovoWmi::ThermalToString(ThermalMode::Quiet) == L"Quiet (Синій Fn+Q)");
+    ASSERT_TRUE(LenovoWmi::ThermalToString(ThermalMode::Balance) == L"Balance (Білий)");
+    ASSERT_TRUE(LenovoWmi::ThermalToString(ThermalMode::Performance) == L"Performance (Червоний)");
+
+    // 4. Lenovo MUX Mode
+    ASSERT_TRUE(LenovoWmi::MuxToString(GpuMuxMode::Hybrid) == L"Hybrid (Динамічний)");
+    ASSERT_TRUE(LenovoWmi::MuxToString(GpuMuxMode::iGpuOnly) == L"iGPU Only (Енергозбереження)");
+    ASSERT_TRUE(LenovoWmi::MuxToString(GpuMuxMode::dGpuOnly) == L"dGPU Only (Ігровий MUX)");
+
+    // 5. Lenovo Keyboard Light
+    ASSERT_TRUE(LenovoWmi::KbdToString(KbdBacklight::Off) == L"Вимкнено");
+    ASSERT_TRUE(LenovoWmi::KbdToString(KbdBacklight::Low) == L"Низька");
+    ASSERT_TRUE(LenovoWmi::KbdToString(KbdBacklight::High) == L"Висока");
+
+    // 6. Crash Handler Descriptions
+    std::wstring desc = CrashHandler::GetExceptionDescription(EXCEPTION_ACCESS_VIOLATION);
+    ASSERT_TRUE(desc.find(L"Неприпустимий доступ до пам'яті") != std::wstring::npos);
+}
+
+TEST_CASE(Ui_SourceFilesUtf8BomIntegrity) {
+    const char* filesToCheck[] = {
+        "main.cpp",
+        "src/gui/GuiWindow.cpp",
+        "src/gui/TrayManager.cpp",
+        "src/core/CrashHandler.cpp",
+        "src/core/UpdateManager.cpp",
+        "src/core/TelemetryThread.cpp",
+        "src/hardware/CpuController.cpp",
+        "src/hardware/LenovoWmi.cpp",
+        "src/hardware/WindowsPowerController.cpp",
+        "include/gui/GuiWindow.hpp",
+        "include/gui/TrayManager.hpp"
+    };
+
+    for (const char* path : filesToCheck) {
+        std::ifstream f(path, std::ios::binary);
+        ASSERT_TRUE(f.is_open());
+
+        unsigned char bom[3] = {0};
+        f.read((char*)bom, 3);
+        // Must start with UTF-8 BOM
+        ASSERT_EQ(bom[0], 0xEF);
+        ASSERT_EQ(bom[1], 0xBB);
+        ASSERT_EQ(bom[2], 0xBF);
+
+        // Read remaining content and check no duplicate BOM or CP1251 mojibake markers
+        std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        ASSERT_TRUE(content.rfind("\xEF\xBB\xBF", 0) != 0);
+        // Ensure no "Р—" or "вњ" in bytes
+        ASSERT_TRUE(content.find("\xD0\xA0\xE2\x80\x94") == std::string::npos);
+        ASSERT_TRUE(content.find("\xD0\xB2\xD1\x9A") == std::string::npos);
+    }
+}
+
 int main() {
+
     return UnitTest::RunAll();
 }
 

@@ -1,13 +1,15 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <gdiplus.h>
 #include <vector>
 #include <string>
 
 enum class GuiTab {
-    Dashboard = 0,   // Головна панель
-    Graphs = 1,      // Графіки та моніторинг
-    Devices = 2      // Процеси та девайси
+    Dashboard = 0,     // Головна панель
+    Graphs = 1,        // Графіки та моніторинг
+    CpuProcesses = 2,  // Енергозатратні процеси на CPU
+    IGpuProcesses = 3, // Процеси на iGPU (Вбудована графіка)
+    Devices = 4        // Дискретна графіка dGPU та пристрої
 };
 
 enum class ProcessFilter {
@@ -24,7 +26,7 @@ struct GuiButton {
     Gdiplus::Color activeColor = Gdiplus::Color(255, 0, 229, 255);
     Gdiplus::Color hoverColor = Gdiplus::Color(255, 33, 41, 54);
     Gdiplus::Color normalColor = Gdiplus::Color(255, 22, 27, 34);
-    int tab = -1; // -1: all tabs / persistent, 0: Dashboard, 1: Graphs, 2: Devices
+    int tab = -1; // -1: persistent across all tabs, 0: Dashboard, 1: Graphs, 2: CpuProcesses, 3: IGpuProcesses, 4: Devices
 };
 
 class GuiWindow {
@@ -40,9 +42,10 @@ private:
                                 const Gdiplus::Brush& brush, const Gdiplus::Pen* pen = nullptr);
     static void DrawCard(Gdiplus::Graphics& g, int x, int y, int w, int h, const std::wstring& title = L"");
 
-
     static void PaintDashboard(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
     static void PaintGraphs(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
+    static void PaintCpuProcesses(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
+    static void PaintIGpuProcesses(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
     static void PaintDevices(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
 
 public:
@@ -52,5 +55,5 @@ public:
     static void HandleMouseMove(HWND hWnd, int x, int y);
     static void SetTab(GuiTab tab);
     static GuiTab GetTab() { return s_currentTab; }
+    static const std::vector<GuiButton>& GetButtons() { return s_buttons; }
 };
-

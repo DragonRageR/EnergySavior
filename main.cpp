@@ -49,18 +49,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_ERASEBKGND:
-            return 1; // Запобігання мерехтінню завдяки подвійній буферизації
+            return 1;
 
         case WM_LBUTTONDOWN: {
             int x = LOWORD(lParam);
             int y = HIWORD(lParam);
 
-            // Спочатку перевіряємо клік по інтерактивних кнопках інтерфейсу
             if (GuiWindow::HandleClick(hWnd, x, y)) {
                 return 0;
             }
 
-            // Дозволяємо перетягування вікна ЛИШЕ на вільній зоні заголовка (y < 46)
+            // Drag window by clicking header (y < 46)
             if (y < 46) {
                 ReleaseCapture();
                 SendMessage(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
@@ -77,7 +76,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
-        case WM_USER + 2: { // Сповіщення від фонового потоку телеметрії про оновлення даних
+        case WM_USER + 2: { // Update from telemetry thread
             if (IsWindowVisible(hWnd)) {
                 InvalidateRect(hWnd, NULL, FALSE);
             }
@@ -118,7 +117,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 case ID_TRAY_CHECK_UPDATE: {
                     UpdateManager::CheckForUpdatesAsync([hWnd](UpdateStatus s, const UpdateInfo& /*info*/) {
                         if (s == UpdateStatus::UpToDate) {
-                            TrayManager::ShowBalloon(L"EnergySavior", L"У вас встановлено найновішу версію!");
+                            TrayManager::ShowBalloon(L"EnergySavior", L"У вас найновіша версія!");
                         }
                     });
                     break;
@@ -134,15 +133,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_CLOSE: {
-            // Згортання у трей замість повного закриття процесу
+            // Minimize to tray instead of quitting
             ShowWindow(hWnd, SW_HIDE);
-            TrayManager::ShowBalloon(L"EnergySavior у треї", 
-                                     L"• ЛКМ по значку в треї: перемикає Еко / Макс\n• ПКМ: меню налаштувань");
             return 0;
         }
 
         case WM_DESTROY: {
-            Logger::Info(L"Застосунок", L"Завершення роботи EnergySavior");
+            Logger::Info(L"Запуск", L"Завершення роботи EnergySavior");
             TelemetryThread::Stop();
             GpuController::Shutdown();
             TrayManager::Destroy();
@@ -167,7 +164,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCmd
             RegCloseKey(hKey);
         }
     }
-    Logger::Info(L"Застосунок", L"Процес EnergySavior ініціалізовано — Версія: " + AppConfig::GetAppVersion() + L" (" + AppConfig::GetAppStage() + L")");
+    Logger::Info(L"Запуск", L"Запуск EnergySavior - Версія: " + AppConfig::GetAppVersion() + L" (" + AppConfig::GetAppStage() + L")");
 
     std::string cmdLine(lpCmdLine);
 
@@ -178,24 +175,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCmd
 
     if (cmdLine.find("--install-autostart") != std::string::npos) {
         bool ok = AppConfig::SetAutoStartEnabled(true);
-        MessageBoxW(NULL, ok ? L"EnergySavior успішно додано в автозапуск з правами Адміністратора!\n\nПрограма стартуватиме разом із Windows у системному треї." 
-                             : L"Не вдалося зареєструвати автозапуск. Перевірте дозволи UAC.", 
-                    L"EnergySavior Налаштування", MB_OK | (ok ? MB_ICONINFORMATION : MB_ICONERROR));
+        MessageBoxW(NULL, ok ? L"EnergySavior успішно додано в автозапуск!\n\nПрограма запускатиметься разом з Windows у системний трей." 
+                             : L"Не вдалося налаштувати автозапуск. Перевірте права адміністратора.", 
+                    L"EnergySavior Автозапуск", MB_OK | (ok ? MB_ICONINFORMATION : MB_ICONERROR));
         return 0;
     }
 
     if (cmdLine.find("--uninstall-autostart") != std::string::npos) {
         bool ok = AppConfig::SetAutoStartEnabled(false);
         MessageBoxW(NULL, ok ? L"Автозапуск EnergySavior успішно вимкнено." 
-                             : L"Не вдалося видалити налаштування автозапуску.", 
-                    L"EnergySavior Налаштування", MB_OK | MB_ICONINFORMATION);
+                             : L"Не вдалося вимкнути автозапуск.", 
+                    L"EnergySavior Автозапуск", MB_OK | MB_ICONINFORMATION);
         return 0;
     }
 
-    // Запобігання запуску кількох екземплярів через системний м'ютекс
+    // Запобігання запуску декількох копій програми
     HANDLE hMutex = CreateMutexW(NULL, TRUE, L"EnergySaviorAppMutex_v2");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        Logger::Info(L"Застосунок", L"Виявлено вже запущений екземпляр EnergySavior, активація наявного вікна");
+        Logger::Info(L"Запуск", L"Виявлено інший екземпляр EnergySavior, активую наявне вікно");
         HWND hExisting = FindWindowW(L"EnergySaviorWindowClass_v2", NULL);
         if (!hExisting) hExisting = FindWindowW(L"EnergyControlWindowClass_v2", NULL);
         if (hExisting) {
@@ -205,7 +202,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCmd
         return 0;
     }
 
-    // Ініціалізація підсистеми GDI+
+    // Ініціалізація GDI+
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
@@ -231,7 +228,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCmd
         WS_EX_APPWINDOW,
         wc.lpszClassName,
         L"EnergySavior",
-        WS_POPUP, // Сучасне вікно без стандартних системних рамок Windows
+        WS_POPUP,
         posX, posY, WINDOW_WIDTH, WINDOW_HEIGHT,
         NULL, NULL, hInstance, NULL
     );
@@ -241,23 +238,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCmd
         return 1;
     }
 
-    // Ініціалізація значка в системному треї
+    // Ініціалізація іконки в системному треї
     TrayManager::Init(hWnd);
 
-    // Початковий стан іконки відповідно до режиму
+    // Початковий стан іконки
     TelemetryData initialTd = TelemetryThread::GetData();
     TrayManager::UpdateIcon(initialTd.isEcoMode);
 
-    // Перевірка прапорця старту у згорнутому стані
+    // Перевірка запуску у фоні
     if (cmdLine.find("--minimized") != std::string::npos) {
-        Logger::Info(L"Застосунок", L"Запуск у фоновому згорнутому режимі (Системний трей)");
+        Logger::Info(L"Запуск", L"Запуск у фоновому режимі (системний трей)");
         ShowWindow(hWnd, SW_HIDE);
     } else {
         ShowWindow(hWnd, SW_SHOW);
         UpdateWindow(hWnd);
     }
 
-    // Головний цикл обробки повідомлень Windows
+    // Головний цикл обробки повідомлень
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);

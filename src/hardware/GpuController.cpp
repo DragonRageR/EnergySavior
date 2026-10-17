@@ -15,20 +15,24 @@ typedef int (*nvmlDeviceGetName_t)(void*, char*, unsigned int);
 typedef int (*nvmlDeviceGetPowerUsage_t)(void*, unsigned int*);
 typedef int (*nvmlDeviceGetTemperature_t)(void*, int, unsigned int*);
 
-struct nvmlProcessInfo_raw {
-    unsigned int pid;
-    unsigned long long usedGpuMemory;
+// NVIDIA NVML Process Info v3 (24 bytes on x64)
+// pid (4) + padding (4) + usedGpuMemory (8) + gpuInstanceId (4) + computeInstanceId (4) = 24 bytes
+struct nvmlProcessInfo_v3_st {
+    unsigned int pid = 0;
+    unsigned long long usedGpuMemory = 0;
+    unsigned int gpuInstanceId = 0;
+    unsigned int computeInstanceId = 0;
 };
 
-typedef int (*nvmlDeviceGetGraphicsRunningProcesses_t)(void*, unsigned int*, nvmlProcessInfo_raw*);
-typedef int (*nvmlDeviceGetComputeRunningProcesses_t)(void*, unsigned int*, nvmlProcessInfo_raw*);
+typedef int (*nvmlDeviceGetGraphicsRunningProcesses_t)(void*, unsigned int*, nvmlProcessInfo_v3_st*);
+typedef int (*nvmlDeviceGetComputeRunningProcesses_t)(void*, unsigned int*, nvmlProcessInfo_v3_st*);
 
 // ============================================================
 // Adaptive NVML session:
 //   - Loaded on first Query() or when activity is detected
 //   - Automatically unloaded after 2 consecutive idle queries (0 processes)
 //     allowing the NVIDIA driver to enter D3Cold sleep (0 Watts)
-//   - Re-checked periodically (every ~40s) or on demand
+//   - Re-checked periodically (every ~30s) or on demand
 // ============================================================
 static std::mutex  s_nvmlMutex;
 static HMODULE     s_hNvml      = nullptr;
@@ -53,7 +57,7 @@ static const int    GPU_IDLE_UNLOAD_CYCLES   = 2;  // ~4s at 2s query rate
 static int          s_idleCount              = 0;
 
 // After unloading NVML, stay sleeping for this many cycles before checking again
-static const int    GPU_SLEEP_RECHECK_CYCLES = 20; // ~40s
+static const int    GPU_SLEEP_RECHECK_CYCLES = 15; // ~30s
 static int          s_sleepCounter           = 0;
 
 // Quick check: does nvml.dll exist on this system?
@@ -132,6 +136,7 @@ static void NvmlDoShutdown() {
 // Helpers
 // ============================================================
 static std::wstring GetProcessName(DWORD pid) {
+    if (pid == 0) return L"System";
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!hProcess) return L"PID " + std::to_wstring(pid);
     wchar_t buffer[MAX_PATH] = { 0 };
@@ -216,19 +221,22 @@ GpuSnapshot GpuController::Query() {
         }
     }
 
-    // Graphics processes
+    // Graphics processes (Safe querying with exact 24-byte struct and buffer headroom)
     unsigned int count = 0;
     if (s_nvmlGetGfx) {
         s_nvmlGetGfx(s_nvmlDev, &count, nullptr);
-        if (count > 0) {
-            std::vector<nvmlProcessInfo_raw> procs(count);
-            if (s_nvmlGetGfx(s_nvmlDev, &count, procs.data()) == 0) {
-                for (unsigned int i = 0; i < count; i++) {
+        if (count > 0 && count < 1000) {
+            unsigned int allocCount = count + 8;
+            std::vector<nvmlProcessInfo_v3_st> procs(allocCount);
+            if (s_nvmlGetGfx(s_nvmlDev, &allocCount, procs.data()) == 0 || allocCount > 0) {
+                for (unsigned int i = 0; i < allocCount && i < procs.size(); i++) {
+                    if (procs[i].pid <= 4) continue;
                     GpuProcess gp;
                     gp.pid = procs[i].pid;
                     if (procs[i].usedGpuMemory != (unsigned long long)-1 &&
-                        procs[i].usedGpuMemory < 64ULL*1024*1024*1024)
-                        gp.memoryMB = procs[i].usedGpuMemory / (1024*1024);
+                        procs[i].usedGpuMemory < 64ULL * 1024 * 1024 * 1024) {
+                        gp.memoryMB = procs[i].usedGpuMemory / (1024 * 1024);
+                    }
                     gp.name = GetProcessName(gp.pid);
                     snap.processes.push_back(gp);
                 }
@@ -240,10 +248,12 @@ GpuSnapshot GpuController::Query() {
     unsigned int compCount = 0;
     if (s_nvmlGetComp) {
         s_nvmlGetComp(s_nvmlDev, &compCount, nullptr);
-        if (compCount > 0) {
-            std::vector<nvmlProcessInfo_raw> procs(compCount);
-            if (s_nvmlGetComp(s_nvmlDev, &compCount, procs.data()) == 0) {
-                for (unsigned int i = 0; i < compCount; i++) {
+        if (compCount > 0 && compCount < 1000) {
+            unsigned int allocComp = compCount + 8;
+            std::vector<nvmlProcessInfo_v3_st> procs(allocComp);
+            if (s_nvmlGetComp(s_nvmlDev, &allocComp, procs.data()) == 0 || allocComp > 0) {
+                for (unsigned int i = 0; i < allocComp && i < procs.size(); i++) {
+                    if (procs[i].pid <= 4) continue;
                     bool exists = false;
                     for (const auto& p : snap.processes) {
                         if (p.pid == procs[i].pid) { exists = true; break; }
@@ -252,8 +262,9 @@ GpuSnapshot GpuController::Query() {
                         GpuProcess gp;
                         gp.pid = procs[i].pid;
                         if (procs[i].usedGpuMemory != (unsigned long long)-1 &&
-                            procs[i].usedGpuMemory < 64ULL*1024*1024*1024)
-                            gp.memoryMB = procs[i].usedGpuMemory / (1024*1024);
+                            procs[i].usedGpuMemory < 64ULL * 1024 * 1024 * 1024) {
+                            gp.memoryMB = procs[i].usedGpuMemory / (1024 * 1024);
+                        }
                         gp.name = GetProcessName(gp.pid);
                         snap.processes.push_back(gp);
                     }
@@ -270,7 +281,6 @@ GpuSnapshot GpuController::Query() {
     if (snap.processes.empty()) {
         s_idleCount++;
         if (s_idleCount >= GPU_IDLE_UNLOAD_CYCLES) {
-            Logger::Info(L"GpuCtrl", L"dGPU idle (0 processes) - releasing NVML to allow D3Cold sleep");
             NvmlDoShutdown();
             s_sleepCounter    = 0;
             snap.isAwake      = false;
@@ -330,43 +340,40 @@ static DWORD FindAppRootPid(DWORD targetPid, std::wstring& outExeName) {
     };
 
     DWORD curr = targetPid;
-    std::wstring targetPath = getFullPath(targetPid);
-    std::wstring targetDir  = ToLowerStr(GetDirectoryOf(targetPath));
-
-    auto isSystemShell = [](const std::wstring& name) {
-        std::wstring n = ToLowerStr(name);
-        return (n==L"explorer.exe"||n==L"services.exe"||n==L"svchost.exe"||
-                n==L"winlogon.exe"||n==L"csrss.exe"||n==L"smss.exe"||
-                n==L"dwm.exe"||n==L"devenv.exe"||n==L"cmd.exe"||
-                n==L"powershell.exe"||n==L"windowsterminal.exe"||
-                n==L"energysavior.exe"||n==L"energycontrol.exe");
-    };
-
     while (true) {
         auto it = procs.find(curr);
         if (it == procs.end()) break;
         DWORD ppid = it->second.parentPid;
         if (ppid == 0 || ppid == curr) break;
+
         auto pit = procs.find(ppid);
         if (pit == procs.end()) break;
-        if (isSystemShell(pit->second.name)) break;
 
-        std::wstring parentPath = getFullPath(ppid);
-        std::wstring parentDir  = ToLowerStr(GetDirectoryOf(parentPath));
-        bool sameName    = (ToLowerStr(it->second.name) == ToLowerStr(pit->second.name));
-        bool sameDir     = (!targetDir.empty() && !parentDir.empty() &&
-                            (parentDir==targetDir ||
-                             targetDir.rfind(parentDir,0)==0 ||
-                             parentDir.rfind(targetDir,0)==0));
-        std::wstring cName = ToLowerStr(it->second.name);
         std::wstring pName = ToLowerStr(pit->second.name);
-        bool relatedName = (cName.size()>=5 && pName.size()>=5 &&
-                            (cName.find(pName.substr(0,5))!=std::wstring::npos ||
-                             pName.find(cName.substr(0,5))!=std::wstring::npos));
+        if (pName == L"explorer.exe" || pName == L"services.exe" ||
+            pName == L"svchost.exe"  || pName == L"wininit.exe"  ||
+            pName == L"csrss.exe"    || pName == L"lsass.exe") {
+            break;
+        }
+
+        std::wstring cName = ToLowerStr(it->second.name);
+        bool sameName = (cName == pName);
+
+        std::wstring cPath = getFullPath(curr);
+        std::wstring pPath = getFullPath(ppid);
+        bool sameDir = (!cPath.empty() && !pPath.empty() &&
+                        ToLowerStr(GetDirectoryOf(cPath)) == ToLowerStr(GetDirectoryOf(pPath)));
+
+        bool relatedName = (!cName.empty() && !pName.empty() &&
+                            (cName.find(pName.substr(0, std::min<size_t>(5, pName.size()))) != std::wstring::npos ||
+                             pName.find(cName.substr(0, std::min<size_t>(5, cName.size()))) != std::wstring::npos));
 
         if (sameName || sameDir || relatedName) {
-            curr = ppid; outExeName = pit->second.name;
-        } else break;
+            curr = ppid;
+            outExeName = pit->second.name;
+        } else {
+            break;
+        }
     }
     return curr;
 }
@@ -411,6 +418,7 @@ bool GpuController::TerminateProcessByPid(DWORD pid) {
 
 void GpuController::TerminateAllRogueProcesses() {
     GpuSnapshot s = Query();
-    for (const auto& p : s.processes)
+    for (const auto& p : s.processes) {
         TerminateProcessByPid(p.pid);
+    }
 }

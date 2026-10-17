@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <string>
 #include <functional>
 #include <atomic>
+#include <mutex>
 
 enum class UpdateStatus {
     Idle,
@@ -25,9 +26,12 @@ struct UpdateInfo {
 
 class UpdateManager {
 private:
+    static inline std::mutex s_updateMutex;
+    static inline std::atomic<bool> s_isChecking{false};
+    static inline std::atomic<bool> s_isDownloading{false};
     static inline std::atomic<UpdateStatus> s_status{UpdateStatus::Idle};
     static inline UpdateInfo s_info;
-    static inline std::wstring s_statusMessage = L"Оновлень не перевірялося";
+    static inline std::wstring s_statusMessage = L"Оновлень не перевірялось";
     static inline HWND s_notifyHwnd = NULL;
 
     static void WorkerCheck(std::function<void(UpdateStatus, const UpdateInfo&)> onComplete);
