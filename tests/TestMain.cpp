@@ -1,4 +1,4 @@
-#include "TestRunner.hpp"
+﻿#include "TestRunner.hpp"
 #include "../include/core/AppConfig.hpp"
 #include "../include/core/Logger.hpp"
 #include "../include/core/CrashHandler.hpp"
@@ -12,7 +12,6 @@
 #include "../include/core/SystemInfo.hpp"
 #include "../include/core/TelemetryThread.hpp"
 #include "../include/gui/GuiWindow.hpp"
-#include "../include/gui/TrayManager.hpp"
 
 
 #include <fstream>
@@ -29,7 +28,7 @@ TEST_CASE(AppConfig_VersionNotEmpty) {
 
 TEST_CASE(AppConfig_CalVerNamingStandard) {
     std::wstring ver = AppConfig::GetAppVersion();
-    ASSERT_TRUE(ver == L"2026.10.4-alpha");
+    ASSERT_TRUE(ver == L"2026.10.5-alpha");
     ASSERT_TRUE(AppConfig::GetAppYearMonth() == L"2026.10");
     ASSERT_TRUE(AppConfig::GetAppStage() == L"Alpha");
 }
@@ -47,6 +46,36 @@ TEST_CASE(AppConfig_AutoSwitchToggle) {
     // Restore
     AppConfig::SetAutoSwitchEnabled(original);
     ASSERT_EQ(AppConfig::IsAutoSwitchEnabled(), original);
+}
+
+TEST_CASE(AppConfig_CustomProfileAndTrayClickSettings) {
+    // Custom Profile Settings
+    AppConfig::SetCustomRefreshRate(60);
+    ASSERT_EQ(AppConfig::GetCustomRefreshRate(), (DWORD)60);
+    AppConfig::SetCustomRefreshRate(144);
+    ASSERT_EQ(AppConfig::GetCustomRefreshRate(), (DWORD)144);
+
+    AppConfig::SetCustomCpuBoost(0);
+    ASSERT_EQ(AppConfig::GetCustomCpuBoost(), 0);
+    AppConfig::SetCustomCpuBoost(2);
+    ASSERT_EQ(AppConfig::GetCustomCpuBoost(), 2);
+
+    AppConfig::SetCustomThermalMode(0);
+    ASSERT_EQ(AppConfig::GetCustomThermalMode(), 0);
+
+    AppConfig::SetCustomKbdBacklight(0);
+    ASSERT_EQ(AppConfig::GetCustomKbdBacklight(), 0);
+
+    AppConfig::SetCustomWinEnergySaver(true);
+    ASSERT_TRUE(AppConfig::GetCustomWinEnergySaver());
+
+    // Tray Left-Click Action
+    AppConfig::SetTrayLeftClickAction(TrayLeftClickAction::CycleProfiles);
+    ASSERT_TRUE(AppConfig::GetTrayLeftClickAction() == TrayLeftClickAction::CycleProfiles);
+    AppConfig::SetTrayLeftClickAction(TrayLeftClickAction::ToggleWindow);
+    ASSERT_TRUE(AppConfig::GetTrayLeftClickAction() == TrayLeftClickAction::ToggleWindow);
+    AppConfig::SetTrayLeftClickAction(TrayLeftClickAction::ShowMenu);
+    ASSERT_TRUE(AppConfig::GetTrayLeftClickAction() == TrayLeftClickAction::ShowMenu);
 }
 
 // ======================================================================
@@ -290,6 +319,9 @@ TEST_CASE(Ui_GuiButtonsAndSymbolsIntegrity) {
     bool foundTabCpu = false;
     bool foundTabIGpu = false;
     bool foundTabDGpu = false;
+    bool foundSavior = false;
+    bool foundCustom = false;
+    bool foundSettings = false;
 
     for (const auto& btn : buttons) {
         // No button text should contain replacement character \uFFFD or mojibake signatures
@@ -334,6 +366,15 @@ TEST_CASE(Ui_GuiButtonsAndSymbolsIntegrity) {
             foundTabIGpu = true;
             ASSERT_TRUE(btn.text.find(L"Процеси iGPU") != std::wstring::npos);
             ASSERT_TRUE(btn.text.find(L"◇") != std::wstring::npos);
+        } else if (btn.id == 36) {
+            foundSavior = true;
+            ASSERT_TRUE(btn.text.find(L"SAVIOR") != std::wstring::npos);
+        } else if (btn.id == 37) {
+            foundCustom = true;
+            ASSERT_TRUE(btn.text.find(L"CUSTOM") != std::wstring::npos);
+        } else if (btn.id == 38) {
+            foundSettings = true;
+            ASSERT_TRUE(btn.text.find(L"Налаштування") != std::wstring::npos);
         } else if (btn.id == 102) {
             foundTabDGpu = true;
             ASSERT_TRUE(btn.text.find(L"Графіка dGPU") != std::wstring::npos);
@@ -346,6 +387,9 @@ TEST_CASE(Ui_GuiButtonsAndSymbolsIntegrity) {
     ASSERT_TRUE(foundUpdate);
     ASSERT_TRUE(foundEco);
     ASSERT_TRUE(foundMax);
+    ASSERT_TRUE(foundSavior);
+    ASSERT_TRUE(foundCustom);
+    ASSERT_TRUE(foundSettings);
     ASSERT_TRUE(foundTabDash);
     ASSERT_TRUE(foundTabGraphs);
     ASSERT_TRUE(foundTabCpu);
@@ -416,11 +460,14 @@ TEST_CASE(Ui_SourceFilesUtf8BomIntegrity) {
         "src/core/CrashHandler.cpp",
         "src/core/UpdateManager.cpp",
         "src/core/TelemetryThread.cpp",
+        "src/core/AppConfig.cpp",
         "src/hardware/CpuController.cpp",
         "src/hardware/LenovoWmi.cpp",
         "src/hardware/WindowsPowerController.cpp",
         "include/gui/GuiWindow.hpp",
-        "include/gui/TrayManager.hpp"
+        "include/gui/TrayManager.hpp",
+        "include/core/AppConfig.hpp",
+        "include/core/TelemetryThread.hpp"
     };
 
     for (const char* path : filesToCheck) {

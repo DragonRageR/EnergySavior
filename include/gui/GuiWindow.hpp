@@ -9,7 +9,8 @@ enum class GuiTab {
     Graphs = 1,        // Графіки та моніторинг
     CpuProcesses = 2,  // Енергозатратні процеси на CPU
     IGpuProcesses = 3, // Процеси на iGPU (Вбудована графіка)
-    Devices = 4        // Дискретна графіка dGPU та пристрої
+    Devices = 4,       // Дискретна графіка dGPU та пристрої
+    Settings = 5       // Налаштування користувацького профілю та трею
 };
 
 enum class ProcessFilter {
@@ -26,7 +27,7 @@ struct GuiButton {
     Gdiplus::Color activeColor = Gdiplus::Color(255, 0, 229, 255);
     Gdiplus::Color hoverColor = Gdiplus::Color(255, 33, 41, 54);
     Gdiplus::Color normalColor = Gdiplus::Color(255, 22, 27, 34);
-    int tab = -1; // -1: persistent across all tabs, 0: Dashboard, 1: Graphs, 2: CpuProcesses, 3: IGpuProcesses, 4: Devices
+    int tab = -1; // -1: persistent across all tabs, 0: Dashboard, 1: Graphs, 2: CpuProcesses, 3: IGpuProcesses, 4: Devices, 5: Settings
 };
 
 class GuiWindow {
@@ -47,6 +48,7 @@ private:
     static void PaintCpuProcesses(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
     static void PaintIGpuProcesses(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
     static void PaintDevices(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
+    static void PaintSettings(Gdiplus::Graphics& g, const struct TelemetryData& td, int w, int h);
 
 public:
     static void InitButtons();

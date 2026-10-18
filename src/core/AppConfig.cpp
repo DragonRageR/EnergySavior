@@ -122,3 +122,67 @@ void AppConfig::SetAutoUpdateCheckEnabled(bool enable) {
     std::wstring file = GetConfigFile();
     WritePrivateProfileStringW(L"Settings", L"AutoUpdateCheck", enable ? L"1" : L"0", file.c_str());
 }
+
+TrayLeftClickAction AppConfig::GetTrayLeftClickAction() {
+    std::wstring file = GetConfigFile();
+    int val = GetPrivateProfileIntW(L"Settings", L"TrayLeftClickAction", 0, file.c_str());
+    if (val < 0 || val > 2) val = 0;
+    return static_cast<TrayLeftClickAction>(val);
+}
+
+void AppConfig::SetTrayLeftClickAction(TrayLeftClickAction action) {
+    std::wstring file = GetConfigFile();
+    WritePrivateProfileStringW(L"Settings", L"TrayLeftClickAction", std::to_wstring(static_cast<int>(action)).c_str(), file.c_str());
+}
+
+DWORD AppConfig::GetCustomRefreshRate() {
+    std::wstring file = GetConfigFile();
+    int val = GetPrivateProfileIntW(L"CustomProfile", L"RefreshRate", 60, file.c_str());
+    return (val == 144) ? 144 : 60;
+}
+
+void AppConfig::SetCustomRefreshRate(DWORD hz) {
+    std::wstring file = GetConfigFile();
+    WritePrivateProfileStringW(L"CustomProfile", L"RefreshRate", std::to_wstring(hz).c_str(), file.c_str());
+}
+
+int AppConfig::GetCustomCpuBoost() {
+    std::wstring file = GetConfigFile();
+    return GetPrivateProfileIntW(L"CustomProfile", L"CpuBoost", 0, file.c_str());
+}
+
+void AppConfig::SetCustomCpuBoost(int mode) {
+    std::wstring file = GetConfigFile();
+    WritePrivateProfileStringW(L"CustomProfile", L"CpuBoost", std::to_wstring(mode).c_str(), file.c_str());
+}
+
+int AppConfig::GetCustomThermalMode() {
+    std::wstring file = GetConfigFile();
+    return GetPrivateProfileIntW(L"CustomProfile", L"ThermalMode", 0, file.c_str());
+}
+
+void AppConfig::SetCustomThermalMode(int mode) {
+    std::wstring file = GetConfigFile();
+    WritePrivateProfileStringW(L"CustomProfile", L"ThermalMode", std::to_wstring(mode).c_str(), file.c_str());
+}
+
+int AppConfig::GetCustomKbdBacklight() {
+    std::wstring file = GetConfigFile();
+    return GetPrivateProfileIntW(L"CustomProfile", L"KbdBacklight", 0, file.c_str());
+}
+
+void AppConfig::SetCustomKbdBacklight(int light) {
+    std::wstring file = GetConfigFile();
+    WritePrivateProfileStringW(L"CustomProfile", L"KbdBacklight", std::to_wstring(light).c_str(), file.c_str());
+}
+
+bool AppConfig::GetCustomWinEnergySaver() {
+    std::wstring file = GetConfigFile();
+    return (GetPrivateProfileIntW(L"CustomProfile", L"WinEnergySaver", 1, file.c_str()) == 1);
+}
+
+void AppConfig::SetCustomWinEnergySaver(bool enable) {
+    std::wstring file = GetConfigFile();
+    WritePrivateProfileStringW(L"CustomProfile", L"WinEnergySaver", enable ? L"1" : L"0", file.c_str());
+}
+

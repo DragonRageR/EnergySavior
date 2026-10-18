@@ -11,6 +11,7 @@
 #include "../hardware/LenovoWmi.hpp"
 #include "../hardware/WindowsPowerController.hpp"
 #include "SystemInfo.hpp"
+#include "AppConfig.hpp"
 
 struct TelemetryData {
     BatterySnapshot battery;
@@ -31,6 +32,7 @@ struct TelemetryData {
     std::vector<TopProcessInfo> topProcesses;
     std::vector<TopProcessInfo> cpuProcesses;
     std::vector<TopProcessInfo> iGpuProcesses;
+    AppPowerProfile powerProfile = AppPowerProfile::Max;
     bool isEcoMode = false;
     bool isElevated = false;
 };
@@ -55,8 +57,12 @@ public:
     static TelemetryData GetData();
     static std::vector<float> GetPowerHistory(size_t maxSeconds = 60);
 
+    static void ApplySaviorProfile();
     static void ApplyEcoProfile();
     static void ApplyPerformanceProfile();
+    static void ApplyCustomProfile();
+    static void SetProfile(AppPowerProfile profile);
+    static void CycleProfile();
     static void ToggleMode();
 
     static void SetRefreshRate(DWORD hz);

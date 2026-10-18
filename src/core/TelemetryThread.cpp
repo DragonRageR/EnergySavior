@@ -5,7 +5,6 @@
 #include "../../include/hardware/WindowsPowerController.hpp"
 #include "../../include/hardware/GpuController.hpp"
 #include <thread>
-#include <algorithm>
 #include <objbase.h>
 
 void TelemetryThread::Start(HWND notifyHwnd) {
@@ -59,6 +58,39 @@ void TelemetryThread::MarkNotificationSent() {
     s_lastNotificationTime = GetTickCount();
 }
 
+void TelemetryThread::ApplySaviorProfile() {
+    if (s_isSwitching) return;
+    s_isSwitching = true;
+
+    Logger::Info(L"Автоматика", L"Перемикання в режим SAVIOR (екстремальна економія): 60 Hz, Boost вимкнено, підсвітка OFF, профіль Quiet, Windows Saver");
+
+    DisplayController::SetRefreshRate(60);
+    CpuController::ApplyEcoProfile();
+    LenovoWmi::SetThermalMode(ThermalMode::Quiet);
+    LenovoWmi::SetKeyboardLight(KbdBacklight::Off);
+    WindowsPowerController::ApplyEcoProfile();
+
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        s_data.refreshRate = 60;
+        s_data.cpuBoost = CpuBoostMode::Disabled;
+        s_data.thermalMode = ThermalMode::Quiet;
+        s_data.kbdLight = KbdBacklight::Off;
+        s_data.powerProfile = AppPowerProfile::Savior;
+        s_data.isEcoMode = true;
+        s_data.winPower.isEnergySaverActive = true;
+    }
+
+    TrayManager::UpdateIcon(AppPowerProfile::Savior);
+
+    if (CanNotify()) {
+        TrayManager::ShowBalloon(L"EnergySavior • РЕЖИМ SAVIOR", L"Активовано режим екстремального енергозбереження:\n• Екран: 60 Hz\n• CPU Boost: Вимкнено (Eco-throttle)\n• Охолодження: Тихий (Quiet)\n• Підсвітка клавіатури: Вимкнено\n• Windows: Енергозбереження");
+        MarkNotificationSent();
+    }
+
+    s_isSwitching = false;
+}
+
 void TelemetryThread::ApplyEcoProfile() {
     if (s_isSwitching) return;
     s_isSwitching = true;
@@ -75,9 +107,12 @@ void TelemetryThread::ApplyEcoProfile() {
         s_data.refreshRate = 60;
         s_data.cpuBoost = CpuBoostMode::Disabled;
         s_data.thermalMode = ThermalMode::Quiet;
+        s_data.powerProfile = AppPowerProfile::Eco;
         s_data.isEcoMode = true;
         s_data.winPower.isEnergySaverActive = true;
     }
+
+    TrayManager::UpdateIcon(AppPowerProfile::Eco);
 
     if (CanNotify()) {
         TrayManager::ShowBalloon(L"EnergySavior • ЕКО РЕЖИМ", L"Увімкнено максимальне енергозбереження:\n• Екран: 60 Hz\n• CPU Boost: Вимкнено\n• Охолодження: Quiet (Тихий)\n• Windows: Енергозбереження");
@@ -103,9 +138,12 @@ void TelemetryThread::ApplyPerformanceProfile() {
         s_data.refreshRate = 144;
         s_data.cpuBoost = CpuBoostMode::Aggressive;
         s_data.thermalMode = ThermalMode::Balance;
+        s_data.powerProfile = AppPowerProfile::Max;
         s_data.isEcoMode = false;
         s_data.winPower.isEnergySaverActive = false;
     }
+
+    TrayManager::UpdateIcon(AppPowerProfile::Max);
 
     if (CanNotify()) {
         TrayManager::ShowBalloon(L"EnergySavior • МАКС. РЕЖИМ", L"Увімкнено продуктивний профіль:\n• Екран: 144 Hz\n• CPU Boost: Агресивний\n• Охолодження: Balance (Збалансований)\n• Windows: Збалансований");
@@ -115,18 +153,81 @@ void TelemetryThread::ApplyPerformanceProfile() {
     s_isSwitching = false;
 }
 
-void TelemetryThread::ToggleMode() {
-    bool currentEco = false;
-    {
-        std::lock_guard<std::mutex> lock(s_mutex);
-        currentEco = s_data.isEcoMode;
+void TelemetryThread::ApplyCustomProfile() {
+    if (s_isSwitching) return;
+    s_isSwitching = true;
+
+    DWORD hz = AppConfig::GetCustomRefreshRate();
+    int boostInt = AppConfig::GetCustomCpuBoost();
+    int thermalInt = AppConfig::GetCustomThermalMode();
+    int kbdInt = AppConfig::GetCustomKbdBacklight();
+    bool winSaver = AppConfig::GetCustomWinEnergySaver();
+
+    Logger::Info(L"Автоматика", L"Перемикання в CUSTOM режим: " + std::to_wstring(hz) + L" Hz, Boost=" + std::to_wstring(boostInt) + L", Thermal=" + std::to_wstring(thermalInt));
+
+    DisplayController::SetRefreshRate(hz);
+    CpuBoostMode boostMode = (boostInt == 0) ? CpuBoostMode::Disabled : ((boostInt == 2) ? CpuBoostMode::Aggressive : CpuBoostMode::Enabled);
+    CpuController::SetBoostMode(boostMode, false);
+    CpuController::SetBoostMode(boostMode, true);
+    ThermalMode thermalMode = static_cast<ThermalMode>(thermalInt);
+    LenovoWmi::SetThermalMode(thermalMode);
+    KbdBacklight kbdLight = static_cast<KbdBacklight>(kbdInt);
+    LenovoWmi::SetKeyboardLight(kbdLight);
+
+    if (winSaver) {
+        WindowsPowerController::ApplyEcoProfile();
+    } else {
+        WindowsPowerController::ApplyPerformanceProfile();
     }
 
-    if (currentEco) {
-        ApplyPerformanceProfile();
-    } else {
-        ApplyEcoProfile();
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        s_data.refreshRate = hz;
+        s_data.cpuBoost = boostMode;
+        s_data.thermalMode = thermalMode;
+        s_data.kbdLight = kbdLight;
+        s_data.powerProfile = AppPowerProfile::Custom;
+        s_data.isEcoMode = (hz == 60 && boostInt == 0);
+        s_data.winPower.isEnergySaverActive = winSaver;
     }
+
+    TrayManager::UpdateIcon(AppPowerProfile::Custom);
+
+    if (CanNotify()) {
+        TrayManager::ShowBalloon(L"EnergySavior • ВЛАСНИЙ РЕЖИМ", L"Застосовано налаштування Custom-профілю:\n• Екран: " + std::to_wstring(hz) + L" Hz\n• CPU Boost: " + CpuController::ToString(boostMode) + L"\n• Охолодження: " + LenovoWmi::ThermalToString(thermalMode));
+        MarkNotificationSent();
+    }
+
+    s_isSwitching = false;
+}
+
+void TelemetryThread::SetProfile(AppPowerProfile profile) {
+    switch (profile) {
+        case AppPowerProfile::Savior: ApplySaviorProfile(); break;
+        case AppPowerProfile::Eco:    ApplyEcoProfile(); break;
+        case AppPowerProfile::Max:    ApplyPerformanceProfile(); break;
+        case AppPowerProfile::Custom: ApplyCustomProfile(); break;
+    }
+}
+
+void TelemetryThread::CycleProfile() {
+    AppPowerProfile cur = AppPowerProfile::Max;
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        cur = s_data.powerProfile;
+    }
+
+    AppPowerProfile next;
+    if (cur == AppPowerProfile::Savior) next = AppPowerProfile::Eco;
+    else if (cur == AppPowerProfile::Eco) next = AppPowerProfile::Max;
+    else if (cur == AppPowerProfile::Max) next = AppPowerProfile::Custom;
+    else next = AppPowerProfile::Savior;
+
+    SetProfile(next);
+}
+
+void TelemetryThread::ToggleMode() {
+    CycleProfile();
 }
 
 void TelemetryThread::SetRefreshRate(DWORD hz) {

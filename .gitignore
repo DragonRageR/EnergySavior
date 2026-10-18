@@ -19,5 +19,6 @@
 # Local config cache
 config.ini
 
-# Generated UI verification images
-build/ui-previews/
+# Build and compilation databases
+build/
+compile_commands.json

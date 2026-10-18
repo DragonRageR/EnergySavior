@@ -102,7 +102,8 @@ void GuiWindow::InitButtons() {
     s_buttons.push_back({ 16, Rect(808, 12, 28, 26), L"—", false, false, Color(255, 100, 100, 100), Color(255, 40, 45, 55), Color(255, 22, 27, 34), -1 });
     s_buttons.push_back({ 17, Rect(842, 12, 28, 26), L"✕", false, false, Color(255, 255, 60, 60), Color(255, 80, 25, 25), Color(255, 22, 27, 34), -1 });
     s_buttons.push_back({ 21, Rect(650, 12, 145, 26), L"WIN SAVER: OFF", false, false, Color(255, 0, 230, 118), Color(40, 0, 230, 118), Color(30, 100, 110, 125), -1 });
-    s_buttons.push_back({ 25, Rect(485, 680, 145, 28), L"[🐞] Баг-репорт", false, false, Color(255, 234, 179, 8), Color(255, 45, 38, 20), Color(255, 22, 27, 34), -1 });
+    s_buttons.push_back({ 38, Rect(330, 680, 145, 28), L"[⚙] Налаштування", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), -1 });
+    s_buttons.push_back({ 25, Rect(485, 680, 145, 28), L"[!] Баг-репорт", false, false, Color(255, 234, 179, 8), Color(255, 45, 38, 20), Color(255, 22, 27, 34), -1 });
     s_buttons.push_back({ 20, Rect(640, 680, 215, 28), L"[Оновлення]", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), -1 });
 
     // 5 Navigation Tabs (tab = -1): width = 160 each, gap = 7.5px
@@ -115,9 +116,11 @@ void GuiWindow::InitButtons() {
     // =========================================================================
     // Dashboard Tab Buttons (tab = 0)
     // =========================================================================
-    // Hero Mode Buttons
-    s_buttons.push_back({ 1, Rect(585, 92, 125, 88), L"[ ECO ]\n60Hz + Quiet", false, false, Color(255, 0, 230, 118), Color(255, 20, 50, 35), Color(255, 22, 27, 34), 0 });
-    s_buttons.push_back({ 19, Rect(720, 92, 125, 88), L"[ MAX ]\n144Hz + Boost", false, false, Color(255, 0, 229, 255), Color(255, 20, 45, 60), Color(255, 22, 27, 34), 0 });
+    // Hero Mode Buttons: Savior (36), Eco (1), Custom (37), Max (19)
+    s_buttons.push_back({ 36, Rect(485, 92, 175, 42), L"[ SAVIOR ]\nУльтра-Еко", false, false, Color(255, 16, 185, 129), Color(255, 15, 45, 30), Color(255, 22, 27, 34), 0 });
+    s_buttons.push_back({ 1, Rect(670, 92, 175, 42), L"[ ECO ]\n60Hz + Quiet", false, false, Color(255, 0, 230, 118), Color(255, 20, 50, 35), Color(255, 22, 27, 34), 0 });
+    s_buttons.push_back({ 37, Rect(485, 138, 175, 42), L"[ CUSTOM ]\nВласний", false, false, Color(255, 168, 85, 247), Color(255, 40, 25, 55), Color(255, 22, 27, 34), 0 });
+    s_buttons.push_back({ 19, Rect(670, 138, 175, 42), L"[ MAX ]\n144Hz + Boost", false, false, Color(255, 0, 229, 255), Color(255, 20, 45, 60), Color(255, 22, 27, 34), 0 });
 
     // Quick links in Card 2
     s_buttons.push_back({ 22, Rect(655, 212, 190, 36), L"◈ Графіки  >", false, false, Color(255, 0, 229, 255), Color(255, 20, 45, 60), Color(255, 26, 32, 42), 0 });
@@ -180,6 +183,34 @@ void GuiWindow::InitButtons() {
     s_buttons.push_back({ 104, Rect(25, 86, 180, 30), L"← Назад на головну", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 4 });
     s_buttons.push_back({ 33, Rect(475, 86, 160, 30), L"[↻] Оновити процеси", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 4 });
     s_buttons.push_back({ 15, Rect(645, 86, 210, 30), L"[X] Зупинити процеси dGPU", false, false, Color(255, 239, 68, 68), Color(255, 60, 20, 25), Color(255, 45, 15, 20), 4 });
+
+    // =========================================================================
+    // Settings Tab Buttons (tab = 5)
+    // =========================================================================
+    s_buttons.push_back({ 109, Rect(25, 86, 180, 30), L"← Назад на головну", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 5 });
+
+    s_buttons.push_back({ 201, Rect(220, 160, 95, 30), L"60 Hz", false, false, Color(255, 0, 230, 118), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 202, Rect(325, 160, 95, 30), L"144 Hz", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+
+    s_buttons.push_back({ 203, Rect(220, 200, 150, 30), L"Boost OFF (~2.4 GHz)", false, false, Color(255, 0, 230, 118), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 204, Rect(380, 200, 150, 30), L"Boost ON (до 4.4 GHz)", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+
+    s_buttons.push_back({ 205, Rect(220, 240, 95, 30), L"Тихий", false, false, Color(255, 59, 130, 246), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 206, Rect(325, 240, 95, 30), L"Баланс", false, false, Color(255, 243, 244, 246), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 207, Rect(430, 240, 95, 30), L"Максимум", false, false, Color(255, 239, 68, 68), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+
+    s_buttons.push_back({ 208, Rect(220, 280, 95, 30), L"Вимкнено", false, false, Color(255, 139, 148, 158), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 209, Rect(325, 280, 95, 30), L"Низька", false, false, Color(255, 147, 51, 234), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 210, Rect(430, 280, 95, 30), L"Висока", false, false, Color(255, 192, 132, 252), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+
+    s_buttons.push_back({ 211, Rect(220, 320, 110, 30), L"Saver Увімк", false, false, Color(255, 0, 230, 118), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 212, Rect(340, 320, 110, 30), L"Saver Вимк", false, false, Color(255, 139, 148, 158), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+
+    s_buttons.push_back({ 215, Rect(565, 200, 270, 72), L"[ АКТИВУВАТИ CUSTOM ]\nЗастосувати налаштування", false, false, Color(255, 168, 85, 247), Color(255, 45, 25, 60), Color(255, 22, 27, 34), 5 });
+
+    s_buttons.push_back({ 221, Rect(35, 435, 800, 34), L"[↻]  Перемикати режими по колу (Savior → Eco → Max → Custom → Savior)", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 222, Rect(35, 477, 800, 34), L"[□]  Відкрити / Згорнути головне вікно EnergySavior", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
+    s_buttons.push_back({ 223, Rect(35, 519, 800, 34), L"[≡]  Відкрити контекстне меню системного трею", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 5 });
 }
 
 void GuiWindow::SetTab(GuiTab tab) {
@@ -192,6 +223,7 @@ void GuiWindow::SetTab(GuiTab tab) {
         else if (btn.id == 105) btn.isActive = (s_currentTab == GuiTab::CpuProcesses);
         else if (btn.id == 106) btn.isActive = (s_currentTab == GuiTab::IGpuProcesses);
         else if (btn.id == 102) btn.isActive = (s_currentTab == GuiTab::Devices);
+        else if (btn.id == 38) btn.isActive = (s_currentTab == GuiTab::Settings);
     }
 }
 
@@ -243,7 +275,12 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc, const TelemetryData& td) {
 
     // Dynamic button state updates
     for (auto& btn : s_buttons) {
-        if (btn.id == 2) btn.isActive = (td.refreshRate == 60);
+        if (btn.id == 36) btn.isActive = (td.powerProfile == AppPowerProfile::Savior);
+        else if (btn.id == 1) btn.isActive = (td.powerProfile == AppPowerProfile::Eco);
+        else if (btn.id == 19) btn.isActive = (td.powerProfile == AppPowerProfile::Max);
+        else if (btn.id == 37) btn.isActive = (td.powerProfile == AppPowerProfile::Custom);
+        else if (btn.id == 38) btn.isActive = (s_currentTab == GuiTab::Settings);
+        else if (btn.id == 2) btn.isActive = (td.refreshRate == 60);
         else if (btn.id == 3) btn.isActive = (td.refreshRate == 144);
         else if (btn.id == 4) btn.isActive = (td.cpuBoost == CpuBoostMode::Disabled);
         else if (btn.id == 5) btn.isActive = (td.cpuBoost == CpuBoostMode::Aggressive);
@@ -263,6 +300,21 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc, const TelemetryData& td) {
         else if (btn.id == 27) btn.isActive = (s_selectedGraphSeconds == 60);
         else if (btn.id == 28) btn.isActive = (s_selectedGraphSeconds == 300);
         else if (btn.id == 29) btn.isActive = (s_selectedGraphSeconds == 900);
+        else if (btn.id == 201) btn.isActive = (AppConfig::GetCustomRefreshRate() == 60);
+        else if (btn.id == 202) btn.isActive = (AppConfig::GetCustomRefreshRate() == 144);
+        else if (btn.id == 203) btn.isActive = (AppConfig::GetCustomCpuBoost() == 0);
+        else if (btn.id == 204) btn.isActive = (AppConfig::GetCustomCpuBoost() != 0);
+        else if (btn.id == 205) btn.isActive = (AppConfig::GetCustomThermalMode() == 0);
+        else if (btn.id == 206) btn.isActive = (AppConfig::GetCustomThermalMode() == 1);
+        else if (btn.id == 207) btn.isActive = (AppConfig::GetCustomThermalMode() == 2);
+        else if (btn.id == 208) btn.isActive = (AppConfig::GetCustomKbdBacklight() == 0);
+        else if (btn.id == 209) btn.isActive = (AppConfig::GetCustomKbdBacklight() == 1);
+        else if (btn.id == 210) btn.isActive = (AppConfig::GetCustomKbdBacklight() == 2);
+        else if (btn.id == 211) btn.isActive = AppConfig::GetCustomWinEnergySaver();
+        else if (btn.id == 212) btn.isActive = !AppConfig::GetCustomWinEnergySaver();
+        else if (btn.id == 221) btn.isActive = (AppConfig::GetTrayLeftClickAction() == TrayLeftClickAction::CycleProfiles);
+        else if (btn.id == 222) btn.isActive = (AppConfig::GetTrayLeftClickAction() == TrayLeftClickAction::ToggleWindow);
+        else if (btn.id == 223) btn.isActive = (AppConfig::GetTrayLeftClickAction() == TrayLeftClickAction::ShowMenu);
         else if (btn.id == 20) {
             UpdateStatus st = UpdateManager::GetStatus();
             if (st == UpdateStatus::UpdateAvailable) {
@@ -303,6 +355,9 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc, const TelemetryData& td) {
             break;
         case GuiTab::Devices:
             PaintDevices(g, td, w, h);
+            break;
+        case GuiTab::Settings:
+            PaintSettings(g, td, w, h);
             break;
     }
 
@@ -361,22 +416,43 @@ void GuiWindow::PaintDashboard(Graphics& g, const TelemetryData& td, int /*w*/, 
 
     // 1. Hero Profile Card (Y: 86, H: 104, W: 840)
     Rect heroRc(20, 86, 840, 104);
-    Color heroBgCol = td.isEcoMode ? Color(255, 15, 35, 25) : Color(255, 16, 32, 48);
-    Color heroBorderCol = td.isEcoMode ? Color(255, 0, 230, 118) : Color(255, 0, 229, 255);
+    Color heroBgCol = Color(255, 16, 32, 48);
+    Color heroBorderCol = Color(255, 0, 229, 255);
+    SolidBrush* titleBrush = &textCyan;
+    std::wstring heroTitle = L"[MAX] МАКСИМАЛЬНА ПРОДУКТИВНІСТЬ";
+    std::wstring heroSub = L"Екран 144 Hz • Boost увімкнено\nПрофіль для роботи та ігор.";
+
+    SolidBrush textPurple(Color(255, 192, 132, 252));
+
+    if (td.powerProfile == AppPowerProfile::Savior) {
+        heroBgCol = Color(255, 8, 30, 20);
+        heroBorderCol = Color(255, 16, 185, 129);
+        titleBrush = &textGreen;
+        heroTitle = L"[SAVIOR] МАКСИМАЛЬНЕ ЕНЕРГОЗБЕРЕЖЕННЯ";
+        heroSub = L"Екстремальне енергозбереження (у рази економніше за Eco):\n60 Hz • Boost вимкнено • Мінімум ватів споживання.";
+    } else if (td.powerProfile == AppPowerProfile::Eco) {
+        heroBgCol = Color(255, 15, 35, 25);
+        heroBorderCol = Color(255, 0, 230, 118);
+        titleBrush = &textGreen;
+        heroTitle = L"[ECO] ЕНЕРГОЗБЕРЕЖЕННЯ";
+        heroSub = L"Екран 60 Hz • Boost вимкнено • Тихе охолодження\nПрофіль для тривалої автономної роботи.";
+    } else if (td.powerProfile == AppPowerProfile::Custom) {
+        heroBgCol = Color(255, 35, 20, 50);
+        heroBorderCol = Color(255, 168, 85, 247);
+        titleBrush = &textPurple;
+        heroTitle = L"[CUSTOM] ВЛАСНИЙ ПРОФІЛЬ";
+        heroSub = L"Індивідуальні налаштування з вкладки [⚙ Налаштування].\nНатисніть налаштування, щоб змінити параметри.";
+    }
+
     SolidBrush heroBg(heroBgCol);
     Pen heroBorder(heroBorderCol, 1.5f);
     DrawRoundedRect(g, heroRc, 8, heroBg, &heroBorder);
 
-    Font fHeroTitle(L"Segoe UI", 11.5f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
-    Font fHeroDesc(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+    Font fHeroTitle(L"Segoe UI", 11.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fHeroDesc(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
-    if (td.isEcoMode) {
-        g.DrawString(L"[ECO] ЕНЕРГОЗБЕРЕЖЕННЯ", -1, &fHeroTitle, PointF(45, 104), &textGreen);
-        DrawLabel(g, L"Екран 60 Hz • Boost вимкнено • Тихе охолодження\nПрофіль для довшої роботи від батареї.", fHeroDesc, RectF(45, 134, 520, 44), textWhite, true);
-    } else {
-        g.DrawString(L"[MAX] МАКСИМАЛЬНА ПРОДУКТИВНІСТЬ", -1, &fHeroTitle, PointF(45, 104), &textCyan);
-        DrawLabel(g, L"Екран 144 Hz • Boost увімкнено\nПрофіль для роботи та ігор.", fHeroDesc, RectF(45, 134, 520, 44), textWhite, true);
-    }
+    g.DrawString(heroTitle.c_str(), -1, &fHeroTitle, PointF(38, 98), titleBrush);
+    DrawLabel(g, heroSub, fHeroDesc, RectF(38, 128, 435, 52), textWhite, true);
 
     // 2. Middle Row Cards (Y: 198, H: 125)
     DrawCard(g, 20, 198, 415, 125, L"ЗАРЯД ТА ЖИВЛЕННЯ");
@@ -853,6 +929,40 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
     drawDeviceBox(585, 495, 260, 75, L"Зовнішні монітори", (td.system.hasExternalDisplay ? L"Виявлено" : L"Лише екран лептопу"), extTxt, (td.system.hasExternalDisplay ? textCyan : textMuted));
 }
 
+void GuiWindow::PaintSettings(Graphics& g, const TelemetryData& /*td*/, int /*w*/, int /*h*/) {
+    SolidBrush textWhite(Color(255, 240, 246, 252));
+    SolidBrush textMuted(Color(255, 139, 148, 158));
+    SolidBrush textCyan(Color(255, 0, 229, 255));
+    SolidBrush textGreen(Color(255, 0, 230, 118));
+
+    // Card 1: Custom Profile Settings (Y: 124, H: 245, W: 840)
+    DrawCard(g, 20, 124, 840, 245, L"НАЛАШТУВАННЯ КОРИСТУВАЦЬКОГО ПРОФІЛЮ (CUSTOM MODE)");
+
+    Font fHdr(L"Segoe UI", 9.2f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fDesc(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+
+    g.DrawString(L"Частота екрану:", -1, &fHdr, PointF(35, 166), &textWhite);
+    g.DrawString(L"Intel / AMD Boost:", -1, &fHdr, PointF(35, 206), &textWhite);
+    g.DrawString(L"Охолодження (TDP):", -1, &fHdr, PointF(35, 246), &textWhite);
+    g.DrawString(L"Підсвітка клавіш:", -1, &fHdr, PointF(35, 286), &textWhite);
+    g.DrawString(L"Windows Saver:", -1, &fHdr, PointF(35, 326), &textWhite);
+
+    DrawLabel(g, L"Ці параметри автоматично застосовуються при виборі режиму [CUSTOM] на головній панелі або через системний трей.\nНалаштуйте бажаний баланс і натисніть фіолетову кнопку для тесту.",
+              fDesc, RectF(565, 285, 270, 75), textMuted, true);
+
+    // Card 2: Tray Left Click Action (Y: 382, H: 185, W: 840)
+    DrawCard(g, 20, 382, 840, 185, L"ДІЯ ПРИ ОДИНАРНОМУ КЛІКУ ЛКМ ПО ІКОНЦІ В ТРЕЇ");
+
+    DrawLabel(g, L"Оберіть, яку дію виконувати при натисканні лівою кнопкою миші на іконку програми біля годинника:",
+              fDesc, RectF(35, 412, 800, 20), textCyan);
+
+    // Card 3: Savior Info (Y: 580, H: 85, W: 840)
+    DrawCard(g, 20, 580, 840, 85, L"ПРОФІЛЬ SAVIOR (В РОЗРОБЦІ)");
+
+    DrawLabel(g, L"Режим Savior розробляється як екстремальне енергозбереження: у рази економніше за звичайний Eco.\nБазовий профіль (60Hz + ліміт живлення) вже активний. Розширені твіки споживання готуються до наступного релізу.",
+              fDesc, RectF(35, 608, 800, 48), textGreen, true);
+}
+
 bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
     RECT client;
     GetClientRect(hWnd, &client);
@@ -871,7 +981,28 @@ bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
                     SetTab(GuiTab::Devices);
                     GpuController::RequestImmediateProbe();
                     break;
-                case 103: case 104: case 107: case 108: SetTab(GuiTab::Dashboard); break;
+                case 38: SetTab(GuiTab::Settings); break;
+                case 103: case 104: case 107: case 108: case 109: SetTab(GuiTab::Dashboard); break;
+                case 36: TelemetryThread::ApplySaviorProfile(); break;
+                case 1:  TelemetryThread::ApplyEcoProfile(); break;
+                case 19: TelemetryThread::ApplyPerformanceProfile(); break;
+                case 37: TelemetryThread::ApplyCustomProfile(); break;
+                case 201: AppConfig::SetCustomRefreshRate(60); break;
+                case 202: AppConfig::SetCustomRefreshRate(144); break;
+                case 203: AppConfig::SetCustomCpuBoost(0); break;
+                case 204: AppConfig::SetCustomCpuBoost(2); break;
+                case 205: AppConfig::SetCustomThermalMode(0); break;
+                case 206: AppConfig::SetCustomThermalMode(1); break;
+                case 207: AppConfig::SetCustomThermalMode(2); break;
+                case 208: AppConfig::SetCustomKbdBacklight(0); break;
+                case 209: AppConfig::SetCustomKbdBacklight(1); break;
+                case 210: AppConfig::SetCustomKbdBacklight(2); break;
+                case 211: AppConfig::SetCustomWinEnergySaver(true); break;
+                case 212: AppConfig::SetCustomWinEnergySaver(false); break;
+                case 215: TelemetryThread::ApplyCustomProfile(); break;
+                case 221: AppConfig::SetTrayLeftClickAction(TrayLeftClickAction::CycleProfiles); break;
+                case 222: AppConfig::SetTrayLeftClickAction(TrayLeftClickAction::ToggleWindow); break;
+                case 223: AppConfig::SetTrayLeftClickAction(TrayLeftClickAction::ShowMenu); break;
                 case 31: case 32: case 33:
                     GpuController::RequestImmediateProbe();
                     TelemetryThread::RefreshPowerStatus();
@@ -916,8 +1047,6 @@ bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
                 case 27: s_selectedGraphSeconds = 60; break;
                 case 28: s_selectedGraphSeconds = 300; break;
                 case 29: s_selectedGraphSeconds = 900; break;
-                case 1: TelemetryThread::ApplyEcoProfile(); break;
-                case 19: TelemetryThread::ApplyPerformanceProfile(); break;
                 case 2:
                     DisplayController::SetRefreshRate(60);
                     TelemetryThread::SetRefreshRate(60);
