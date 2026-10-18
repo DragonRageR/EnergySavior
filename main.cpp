@@ -1,11 +1,11 @@
 ﻿#define UNICODE
 #define _UNICODE
+#include <windows.h>
+#include <windowsx.h>
 #include <algorithm>
 #include <gdiplus.h>
 #include <shellapi.h>
 #include <string>
-#include <windows.h>
-#include <windowsx.h>
 
 #include "include/core/AppConfig.hpp"
 #include "include/core/CrashHandler.hpp"

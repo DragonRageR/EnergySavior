@@ -1,4 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
+
+# Ensure MinGW GCC is used on Windows to prevent MSVC SDK library errors from standalone LLVM Clang
+if(WIN32)
+    find_program(MINGW_GXX g++)
+    if(MINGW_GXX)
+        set(CMAKE_CXX_COMPILER "${MINGW_GXX}" CACHE FILEPATH "C++ compiler" FORCE)
+        find_program(MINGW_GCC gcc)
+        if(MINGW_GCC)
+            set(CMAKE_C_COMPILER "${MINGW_GCC}" CACHE FILEPATH "C compiler" FORCE)
+        endif()
+    endif()
+endif()
+
 project(EnergySavior VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -43,6 +56,8 @@ if(WIN32)
         dbghelp
         winhttp
         urlmon
+        pdh
+        dxgi
     )
 endif()
 
@@ -68,6 +83,8 @@ if(WIN32)
         dbghelp
         winhttp
         urlmon
+        pdh
+        dxgi
     )
 endif()
 

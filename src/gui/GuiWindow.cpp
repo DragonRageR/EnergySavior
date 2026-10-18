@@ -497,7 +497,8 @@ void GuiWindow::PaintDashboard(Graphics& g, const TelemetryData& td, int /*w*/, 
     std::wstring pwrSub = td.battery.isAcOnline ? L"Мережа 220V (Сумарне TDP)" : L"Розряд батареї (Датчик)";
     DrawLabel(g, pwrSub, fSmallLbl, RectF(460, 268, 185, 18), textGreen);
 
-    std::wstring compSummary = L"Екран: " + FormatWatts(td.displayWatts) + L" (" + std::to_wstring(td.brightness) + L"%) | CPU: " + FormatWatts(td.cpuWatts);
+    std::wstring compSummary = L"CPU: " + FormatWatts(td.cpuWatts) + L" (" + std::to_wstring((int)td.cpuUsagePercent) + L"%) | iGPU: " +
+                              FormatWatts(td.iGpuWatts) + L" (" + std::to_wstring((int)td.iGpuUsagePercent) + L"%) | Екран: " + FormatWatts(td.displayWatts);
     DrawLabel(g, compSummary, fSmallLbl, RectF(460, 298, 385, 18), textMuted);
 
     // 3. System Controls Card (Y: 331, H: 226, W: 840)
@@ -684,7 +685,8 @@ void GuiWindow::PaintGraphs(Graphics& g, const TelemetryData& td, int /*w*/, int
     std::wstring gpuDesc = td.gpu.isAwake ? (L"Активна (" + std::to_wstring(td.gpu.temperatureC) + L"°C)") : L"Спить (D3Cold)";
     drawSplitRow(478, L"Відеокарта (dGPU):", gpuWattsStr, gpuDesc, td.gpu.isAwake ? textRed : textGreen);
 
-    drawSplitRow(508, L"Вбудована iGPU:", FormatWatts(td.iGpuWatts), td.iGpuName, textGreen);
+    std::wstring igpuDesc = std::to_wstring((int)td.iGpuUsagePercent) + L"% • " + td.iGpuName;
+    drawSplitRow(508, L"Вбудована iGPU:", FormatWatts(td.iGpuWatts), igpuDesc, textGreen);
     drawSplitRow(538, L"Системна плата / RAM:", L"~2.5 W", L"DDR5 + NVMe SSD", textMuted);
 
     drawSplitRow(574, L"Сумарне споживання:", FormatWatts(curPwr), (td.battery.isAcOnline ? L"Мережа 220V" : L"Батарея DC"), textGreen);
@@ -777,6 +779,7 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
     SolidBrush textCyan(Color(255, 0, 229, 255));
     SolidBrush textGreen(Color(255, 0, 230, 118));
     SolidBrush textRed(Color(255, 255, 23, 68));
+    SolidBrush textYellow(Color(255, 234, 179, 8));
 
     // Top Summary Banner (Y: 124, H: 65, W: 840)
     DrawCard(g, 20, 124, 840, 65, L"МОНІТОРИНГ ВБУДОВАНОЇ ГРАФІКИ (iGPU)");
@@ -784,10 +787,11 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
     Font fHdrBold(L"Segoe UI", 9.8f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
     Font fHdrReg(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
-    std::wstring iGpuTitle = td.iGpuName + L"  |  Віконні процеси Windows";
+    std::wstring iGpuTitle = td.iGpuName + L"  |  Загальне навантаження: " + std::to_wstring((int)td.iGpuUsagePercent) + L"%";
     DrawLabel(g, iGpuTitle, fHdrBold, RectF(35, 152, 810, 18), textGreen);
 
-    std::wstring iGpuSub = L"Орієнтовний список: наявність вікна не підтверджує використання iGPU процесом.";
+    std::wstring iGpuSub = L"Орієнтовна потужність iGPU: " + FormatWatts(td.iGpuWatts) +
+                          L"  |  Апаратне прискорення D3D/WDDM  |  Активних процесів: " + std::to_wstring(td.iGpuProcesses.size());
     DrawLabel(g, iGpuSub, fHdrReg, RectF(35, 171, 810, 17), textCyan);
 
     // Process Table Card (Y: 198, H: 470, W: 840)
@@ -798,7 +802,7 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
     g.DrawString(L"Додаток / Процес", -1, &fCol, PointF(110, 222), &textMuted);
     g.DrawString(L"Призначення", -1, &fCol, PointF(360, 222), &textMuted);
     g.DrawString(L"Пам'ять (RAM)", -1, &fCol, PointF(580, 222), &textMuted);
-    g.DrawString(L"Визначення GPU", -1, &fCol, PointF(680, 222), &textMuted);
+    g.DrawString(L"iGPU, %", -1, &fCol, PointF(680, 222), &textMuted);
     g.DrawString(L"Дія", -1, &fCol, PointF(815, 222), &textMuted);
 
     Pen linePen(Color(255, 33, 41, 54), 1.0f);
@@ -824,7 +828,17 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
         std::wstring memStr = std::to_wstring(p.memMB) + L" MB";
         g.DrawString(memStr.c_str(), -1, &fRow, PointF(580, (REAL)rowY + 6), &textWhite);
 
-        g.DrawString(L"Не підтверджено", -1, &fRowBold, PointF(680, (REAL)rowY + 6), &textGreen);
+        if (p.gpuPercent > 0.05f) {
+            wchar_t gpuBuf[32];
+            swprintf_s(gpuBuf, L"%.1f %%", p.gpuPercent);
+            const Brush* bGpu = &textGreen;
+            if (p.gpuPercent > 20.0f) bGpu = &textRed;
+            else if (p.gpuPercent > 8.0f) bGpu = &textYellow;
+            g.DrawString(gpuBuf, -1, &fRowBold, PointF(680, (REAL)rowY + 6), bGpu);
+        } else {
+            g.DrawString(L"0.0 % (Фон)", -1, &fRow, PointF(680, (REAL)rowY + 6), &textMuted);
+        }
+
         g.DrawString(L"[✕]", -1, &fRowBold, PointF(815, (REAL)rowY + 6), &textRed);
 
         rowY += 34;
@@ -912,7 +926,8 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
     std::wstring dispSub = std::to_wstring(td.refreshRate) + L" Hz • " + std::to_wstring(td.brightness) + L"%";
     drawDeviceBox(35, 410, 260, 75, L"Дисплей ноутбука", (td.refreshRate == 60 ? L"60 Hz (Енергозбереження)" : L"144 Hz (Плавний)"), dispSub, textCyan);
 
-    std::wstring cpuSub = (td.cpuBoost == CpuBoostMode::Disabled) ? L"Boost вимкнено (~2.4 GHz)" : L"Boost агресивний (до 4.4 GHz)";
+    std::wstring cpuSub = std::wstring(td.cpuBoost == CpuBoostMode::Disabled ? L"Boost вимк." : L"Boost увімк.") +
+                          L" • CPU: " + std::to_wstring((int)td.cpuUsagePercent) + L"% • iGPU: " + std::to_wstring((int)td.iGpuUsagePercent) + L"%";
     drawDeviceBox(310, 410, 260, 75, L"Процесор (CPU)", td.system.cpuName, cpuSub, (td.cpuBoost == CpuBoostMode::Disabled ? textGreen : textCyan));
 
     std::wstring gpuSub = td.gpu.isAwake ? (std::to_wstring((int)td.gpu.powerWatts) + L" W  |  " + std::to_wstring(td.gpu.temperatureC) + L"°C") : L"Повне знеструмлення (0 W)";

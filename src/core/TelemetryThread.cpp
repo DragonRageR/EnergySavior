@@ -289,6 +289,7 @@ void TelemetryThread::WorkerLoop() {
     std::vector<TopProcessInfo> cpuProcs;
     std::vector<TopProcessInfo> iGpuProcs;
     std::wstring iGpuName = SystemInfo::DetectIGpuName();
+    float iGpuUsage = 0.0f;
     GpuSnapshot gpu = GpuController::Query();
 
     auto nextTick = std::chrono::steady_clock::now();
@@ -308,12 +309,15 @@ void TelemetryThread::WorkerLoop() {
         float sysCpu = SystemInfo::GetSystemCpuUsagePercent();
         float cpuWatts = 4.5f + (sysCpu / 100.0f) * (boost == CpuBoostMode::Aggressive ? 42.0f : 20.0f);
 
+        std::unordered_map<DWORD, float> iGpuProcMap;
         if (loopCount % 2 == 0) {
+            iGpuUsage = SystemInfo::GetSystemIGpuUsagePercent(&iGpuProcMap);
             gpu = GpuController::Query();
             cpuProcs = SystemInfo::GetTopCpuProcesses(12, cpuWatts);
             std::vector<DWORD> dPids;
             for (const auto& gp : gpu.processes) dPids.push_back(gp.pid);
-            iGpuProcs = SystemInfo::GetIGpuProcesses(dPids, 12);
+            float estIGpuWatts = 1.0f + (iGpuUsage / 100.0f) * 12.0f;
+            iGpuProcs = SystemInfo::GetIGpuProcesses(dPids, 12, &iGpuProcMap, estIGpuWatts);
             iGpuName = SystemInfo::DetectIGpuName();
         }
 
@@ -326,7 +330,8 @@ void TelemetryThread::WorkerLoop() {
             topProcs = SystemInfo::GetTopMemoryProcesses(6);
         }
 
-        float iGpuWatts = 1.2f + (iGpuProcs.size() > 0 ? 0.8f : 0.0f);
+        float iGpuWatts = 1.0f + (iGpuUsage / 100.0f) * 12.0f;
+        if (iGpuWatts < 1.0f) iGpuWatts = 1.0f;
 
         // Розрахунок потужності (Ватт):
         // - На батареї (DC): реальний фізичний розряд батареї від сенсора (mW -> W)
@@ -380,6 +385,7 @@ void TelemetryThread::WorkerLoop() {
             s_data.cpuWatts = cpuWatts;
             s_data.iGpuName = iGpuName;
             s_data.iGpuWatts = iGpuWatts;
+            s_data.iGpuUsagePercent = iGpuUsage;
             s_data.gpu = gpu;
             s_data.thermalMode = therm;
             s_data.muxMode = mux;

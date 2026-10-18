@@ -23,6 +23,7 @@ struct TelemetryData {
     float cpuWatts = 8.0f;
     std::wstring iGpuName = L"Intel(R) UHD Graphics";
     float iGpuWatts = 1.5f;
+    float iGpuUsagePercent = 0.0f;
     GpuSnapshot gpu;
     ThermalMode thermalMode = ThermalMode::Balance;
     GpuMuxMode muxMode = GpuMuxMode::Hybrid;

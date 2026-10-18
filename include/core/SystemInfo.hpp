@@ -1,8 +1,9 @@
-﻿#pragma once
+#pragma once
 #include <windows.h>
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 struct SystemDetails {
     std::wstring manufacturer = L"Universal PC";
@@ -23,6 +24,7 @@ struct TopProcessInfo {
     float cpuPercent = 0.0f;
     float estimatedWatts = 0.0f;
     std::wstring role;
+    float gpuPercent = 0.0f;
 };
 
 class SystemInfo {
@@ -33,8 +35,11 @@ public:
     static SystemDetails Detect();
     static std::wstring DetectIGpuName();
     static float GetSystemCpuUsagePercent();
+    static float GetSystemIGpuUsagePercent(std::unordered_map<DWORD, float>* outProcUsage = nullptr);
     static std::vector<TopProcessInfo> GetTopMemoryProcesses(size_t maxCount = 6);
     static std::vector<TopProcessInfo> GetTopCpuProcesses(size_t maxCount = 12, float totalCpuWatts = 15.0f);
-    static std::vector<TopProcessInfo> GetIGpuProcesses(const std::vector<DWORD>& dGpuPids, size_t maxCount = 12);
+    static std::vector<TopProcessInfo> GetIGpuProcesses(const std::vector<DWORD>& dGpuPids, size_t maxCount = 12,
+                                                       const std::unordered_map<DWORD, float>* procGpuUsage = nullptr,
+                                                       float totalIGpuWatts = 2.0f);
     static bool TerminateProcessByPid(DWORD pid);
 };

@@ -36,7 +36,7 @@ if not errorlevel 1 (
 
 if /I "%MODE%"=="debug" (
     echo [BUILD] Compiling Debug binary with symbols and runtime diagnostics...
-    g++ -O0 -g3 -std=c++20 -finput-charset=UTF-8 -fexec-charset=UTF-8 -DDEBUG -Wall -Wno-missing-field-initializers -Wno-unused-parameter -Wno-unused-variable -Wno-unknown-pragmas -Wno-stringop-overread main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -loleaut32 -lwbemuuid -lcrypt32 -ldbghelp -lwinhttp -lurlmon -mwindows -o EnergySavior_debug.exe
+    g++ -O0 -g3 -std=c++20 -finput-charset=UTF-8 -fexec-charset=UTF-8 -DDEBUG -Wall -Wno-missing-field-initializers -Wno-unused-parameter -Wno-unused-variable -Wno-unknown-pragmas -Wno-stringop-overread main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -loleaut32 -lwbemuuid -lcrypt32 -ldbghelp -lwinhttp -lurlmon -lpdh -ldxgi -mwindows -o EnergySavior_debug.exe
     if errorlevel 1 goto :FAILED
     echo [SUCCESS] EnergySavior_debug.exe generated successfully!
     goto :END
@@ -44,7 +44,7 @@ if /I "%MODE%"=="debug" (
 
 rem Default: Release (Equivalent to cargo build --release in Rust)
 echo [BUILD] Compiling Release binary: -O3 -flto -flto-partition=none -march=x86-64-v2 -DNDEBUG -s...
-g++ -O3 -std=c++20 -finput-charset=UTF-8 -fexec-charset=UTF-8 -flto -flto-partition=none -march=x86-64-v2 -DNDEBUG -s -Wall -Wno-missing-field-initializers -Wno-unused-parameter -Wno-unused-variable -Wno-unknown-pragmas -Wno-stringop-overread main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -loleaut32 -lwbemuuid -lcrypt32 -ldbghelp -lwinhttp -lurlmon -mwindows -o EnergySavior.exe
+g++ -O3 -std=c++20 -finput-charset=UTF-8 -fexec-charset=UTF-8 -flto -flto-partition=none -march=x86-64-v2 -DNDEBUG -s -Wall -Wno-missing-field-initializers -Wno-unused-parameter -Wno-unused-variable -Wno-unknown-pragmas -Wno-stringop-overread main.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -loleaut32 -lwbemuuid -lcrypt32 -ldbghelp -lwinhttp -lurlmon -lpdh -ldxgi -mwindows -o EnergySavior.exe
 
 
 if errorlevel 1 goto :FAILED

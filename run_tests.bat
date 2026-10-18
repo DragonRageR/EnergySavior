@@ -4,7 +4,7 @@ echo ======================================================================
 echo  EnergySavior: Building and Running Automated Unit Tests
 echo ======================================================================
 
-g++ -O2 -std=c++20 -finput-charset=UTF-8 -fexec-charset=UTF-8 tests/TestMain.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -loleaut32 -lwbemuuid -lcrypt32 -ldbghelp -lwinhttp -lurlmon -o run_tests.exe
+g++ -O2 -std=c++20 -finput-charset=UTF-8 -fexec-charset=UTF-8 tests/TestMain.cpp src/core/*.cpp src/hardware/*.cpp src/gui/*.cpp -lsetupapi -lpowrprof -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -loleaut32 -lwbemuuid -lcrypt32 -ldbghelp -lwinhttp -lurlmon -lpdh -ldxgi -o run_tests.exe
 
 if errorlevel 1 (
     echo.

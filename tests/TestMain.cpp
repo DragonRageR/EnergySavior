@@ -1,4 +1,4 @@
-﻿#include "TestRunner.hpp"
+#include "TestRunner.hpp"
 #include "../include/core/AppConfig.hpp"
 #include "../include/core/Logger.hpp"
 #include "../include/core/CrashHandler.hpp"
@@ -420,6 +420,12 @@ TEST_CASE(SystemInfo_CpuAndIGpuProcesses) {
     }
 }
 
+TEST_CASE(SystemInfo_IGpuUsageQuery) {
+    std::unordered_map<DWORD, float> procMap;
+    float usage = SystemInfo::GetSystemIGpuUsagePercent(&procMap);
+    ASSERT_TRUE(usage >= 0.0f && usage <= 100.0f);
+}
+
 TEST_CASE(Ui_HardwareStringsLocalizationIntegrity) {
     // 1. CPU Boost
     ASSERT_TRUE(CpuController::ToString(CpuBoostMode::Disabled) == L"Вимкнено (~2.4 GHz)");
@@ -505,11 +511,14 @@ TEST_CASE(Ui_ScaledNavigationAndRendering) {
     sample.battery.currentCapacityMWh = 80000;
     sample.system.cpuName = L"Intel Core i7-12700H — процесор із довгою назвою";
     sample.iGpuName = L"Intel Iris Xe Graphics — інтегрований графічний адаптер";
+    sample.iGpuUsagePercent = 14.5f;
+    sample.iGpuWatts = 2.8f;
     sample.gpu.model = L"NVIDIA GeForce RTX 3070 Ti Laptop GPU";
     sample.gpu.isAwake = true;
     sample.gpu.powerWatts = 35.5f;
-    sample.cpuProcesses.push_back({12345, L"Дуже довга назва процесу для перевірки меж таблиці.exe", 16384, 23.5f, 15.7f, L"Довгий опис призначення процесу"});
+    sample.cpuProcesses.push_back({12345, L"Дуже довга назва процесу для перевірки меж таблиці.exe", 16384, 23.5f, 15.7f, L"Довгий опис призначення процесу", 0.0f});
     sample.iGpuProcesses = sample.cpuProcesses;
+    sample.iGpuProcesses[0].gpuPercent = 12.8f;
     CreateDirectoryW(L"build", nullptr);
     CreateDirectoryW(L"build/ui-previews", nullptr);
     for (int percent : {100, 125, 150, 200}) {
