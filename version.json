@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.4-alpha",
+  "version": "2026.10.5-alpha",
   "download_url": "https://github.com/DragonRageR/EnergySavior/releases/latest/download/EnergySavior.exe",
   "release_notes": "Версія 2026.10.4-alpha: миттєве виявлення dGPU при старті, уніфіковане керування процесами на CPU/iGPU/dGPU, інтеграція баг-репортів."
 }
