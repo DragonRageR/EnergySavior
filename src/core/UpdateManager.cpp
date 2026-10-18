@@ -86,11 +86,11 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
     bool checkOk = false;
 
     if (hSession) {
-        HINTERNET hConnect = WinHttpConnect(hSession, L"raw.githubusercontent.com",
+        HINTERNET hConnect = WinHttpConnect(hSession, APP_UPDATE_HOST,
                                             INTERNET_DEFAULT_HTTPS_PORT, 0);
         if (hConnect) {
             HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET",
-                                                    L"/Yaroslav-hub/EnergySavior/master/version.json",
+                                                    APP_UPDATE_PATH,
                                                     NULL, WINHTTP_NO_REFERER,
                                                     WINHTTP_DEFAULT_ACCEPT_TYPES,
                                                     WINHTTP_FLAG_SECURE);
@@ -98,12 +98,21 @@ void UpdateManager::WorkerCheck(std::function<void(UpdateStatus, const UpdateInf
                 if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
                                        WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
                     WinHttpReceiveResponse(hRequest, NULL)) {
-                    
+
+                    DWORD statusCode = 0;
+                    DWORD statusSize = sizeof(statusCode);
+                    WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                                        WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize, WINHTTP_NO_HEADER_INDEX);
+
                     std::string responseBody;
-                    DWORD bytesRead = 0;
-                    char buffer[4096];
-                    while (WinHttpReadData(hRequest, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
-                        responseBody.append(buffer, bytesRead);
+                    if (statusCode == 200) {
+                        DWORD bytesRead = 0;
+                        char buffer[4096];
+                        while (WinHttpReadData(hRequest, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
+                            responseBody.append(buffer, bytesRead);
+                        }
+                    } else {
+                        Logger::Warn(L"UpdateManager", L"HTTP error during update check: " + std::to_wstring(statusCode));
                     }
 
                     if (!responseBody.empty()) {

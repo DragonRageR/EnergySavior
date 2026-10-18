@@ -7,6 +7,8 @@
 #define APP_STAGE L"Alpha"
 #define APP_YEAR_MONTH L"2026.10"
 #define APP_ISSUES_URL L"https://github.com/DragonRageR/EnergySavior/issues/new"
+#define APP_UPDATE_HOST L"raw.githubusercontent.com"
+#define APP_UPDATE_PATH L"/DragonRageR/EnergySavior/master/version.json"
 
 class AppConfig {
 private:
