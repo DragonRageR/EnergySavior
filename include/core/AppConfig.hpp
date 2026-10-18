@@ -3,9 +3,10 @@
 #include <string>
 
 #define APP_NAME L"EnergySavior"
-#define APP_VERSION L"alpha-2026.10"
+#define APP_VERSION L"2026.10.4-alpha"
 #define APP_STAGE L"Alpha"
 #define APP_YEAR_MONTH L"2026.10"
+#define APP_ISSUES_URL L"https://github.com/DragonRageR/EnergySavior/issues/new"
 
 class AppConfig {
 private:

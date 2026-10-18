@@ -1,4 +1,4 @@
-﻿#include "TestRunner.hpp"
+#include "TestRunner.hpp"
 #include "../include/core/AppConfig.hpp"
 #include "../include/core/Logger.hpp"
 #include "../include/core/CrashHandler.hpp"
@@ -29,7 +29,7 @@ TEST_CASE(AppConfig_VersionNotEmpty) {
 
 TEST_CASE(AppConfig_CalVerNamingStandard) {
     std::wstring ver = AppConfig::GetAppVersion();
-    ASSERT_TRUE(ver == L"alpha-2026.10");
+    ASSERT_TRUE(ver == L"2026.10.4-alpha");
     ASSERT_TRUE(AppConfig::GetAppYearMonth() == L"2026.10");
     ASSERT_TRUE(AppConfig::GetAppStage() == L"Alpha");
 }
@@ -235,7 +235,7 @@ TEST_CASE(UpdateManager_StatusDisplayInitial) {
     UpdateManager::Init();
     std::wstring display = UpdateManager::GetStatusDisplayString();
     ASSERT_TRUE(!display.empty());
-    ASSERT_TRUE(display.find(L"alpha-2026.10") != std::wstring::npos);
+    ASSERT_TRUE(display.find(AppConfig::GetAppVersion()) != std::wstring::npos);
 }
 
 // ======================================================================

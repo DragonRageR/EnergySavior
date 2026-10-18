@@ -20,13 +20,17 @@ tasklist /fi "imagename eq EnergySavior.exe" 2>nul | find /i "EnergySavior.exe" 
 if not errorlevel 1 (
     echo [INFO] Stopping running EnergySavior.exe to release file lock...
     taskkill /f /im EnergySavior.exe >nul 2>&1
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul
+)
+del /f /q EnergySavior.old.exe >nul 2>&1
+if exist EnergySavior.exe (
+    move /y EnergySavior.exe EnergySavior.old.exe >nul 2>&1
 )
 tasklist /fi "imagename eq EnergyControl.exe" 2>nul | find /i "EnergyControl.exe" >nul
 if not errorlevel 1 (
     echo [INFO] Stopping running EnergyControl.exe to release file lock...
     taskkill /f /im EnergyControl.exe >nul 2>&1
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul
 )
 
 

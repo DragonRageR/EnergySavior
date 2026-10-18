@@ -145,6 +145,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 case ID_TRAY_OPEN_LOG:
                     Logger::OpenLogFile();
                     break;
+                case ID_TRAY_REPORT_BUG:
+                    Logger::OpenLogFile();
+                    ShellExecuteW(NULL, L"open", APP_ISSUES_URL, NULL, NULL, SW_SHOWNORMAL);
+                    break;
                 case ID_TRAY_EXIT:
                     DestroyWindow(hWnd);
                     break;

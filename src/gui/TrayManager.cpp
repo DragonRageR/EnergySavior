@@ -111,6 +111,7 @@ void TrayManager::ShowContextMenu() {
     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hMenu, MF_STRING, ID_TRAY_CHECK_UPDATE, L"[~] Перевірити оновлення...");
     AppendMenuW(hMenu, MF_STRING, ID_TRAY_OPEN_LOG, L"[!] Відкрити журнал подій (Лог)");
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_REPORT_BUG, L"[🐞] Повідомити про баг (GitHub)...");
     AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"Вихід з програми");
 
     SetForegroundWindow(s_hWnd);

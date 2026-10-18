@@ -24,4 +24,5 @@ public:
     static bool TerminateProcessByPid(DWORD pid);
     static void TerminateAllRogueProcesses();
     static void Shutdown(); // Call once on app exit to release NVML
+    static void RequestImmediateProbe(); // Force immediate NVML probe on next Query
 };

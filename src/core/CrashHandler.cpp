@@ -85,7 +85,7 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
     report << L"       ENERGYSAVIOR CRASH REPORT (АВАРІЙНИЙ ЗВІТ ПРО ПОМИЛКУ)         \n";
     report << L"======================================================================\n\n";
 
-    report << L"Версія програми:   " << L"alpha-2026.10\n";
+    report << L"Версія програми:   " << AppConfig::GetAppVersion() << L"\n";
     report << L"Дата та час:       " << timeBuf << L"\n";
     report << L"PID процесу:       " << GetCurrentProcessId() << L"\n";
     report << L"TID потоку:        " << GetCurrentThreadId() << L"\n";
@@ -197,7 +197,7 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
                               L"EnergySavior зіткнувся з критичною помилкою та не може продовжувати роботу.\n\n"
                               L"Аварійний звіт та дамп пам'яті збережено:\n" +
                               reportPath + L"\n\n"
-                              L"Натисніть 'OK', щоб відкрити папку зі звітом для надсилання розробнику.";
+                              L"Натисніть 'OK', щоб відкрити папку зі звітом та перейти на сторінку баг-репортів GitHub.";
 
     bool isSilent = (wcsstr(GetCommandLineW(), L"--silent") != nullptr);
     if (!isSilent) {
@@ -206,6 +206,7 @@ void CrashHandler::GenerateCrashReport(EXCEPTION_POINTERS* ep, const wchar_t* cu
             // Highlight report in explorer
             std::wstring exploreCmd = L"/select,\"" + reportPath + L"\"";
             ShellExecuteW(NULL, L"open", L"explorer.exe", exploreCmd.c_str(), NULL, SW_SHOW);
+            ShellExecuteW(NULL, L"open", APP_ISSUES_URL, NULL, NULL, SW_SHOWNORMAL);
         }
     }
 }

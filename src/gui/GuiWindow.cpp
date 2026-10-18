@@ -63,6 +63,36 @@ void GuiWindow::DrawCard(Graphics& g, int x, int y, int w, int h, const std::wst
     }
 }
 
+static void PromptTerminateProcess(HWND hWnd, DWORD pid, const std::wstring& name, unsigned long long memMB) {
+    if (pid <= 4 || _wcsicmp(name.c_str(), L"dwm.exe") == 0 ||
+        _wcsicmp(name.c_str(), L"explorer.exe") == 0 ||
+        _wcsicmp(name.c_str(), L"EnergySavior.exe") == 0 ||
+        _wcsicmp(name.c_str(), L"System") == 0 ||
+        _wcsicmp(name.c_str(), L"csrss.exe") == 0) {
+        MessageBoxW(hWnd, 
+            (L"Процес \"" + name + L"\" (PID " + std::to_wstring(pid) + L") є захищеним системним компонентом Windows та не може бути завершений для запобігання збою ОС.").c_str(),
+            L"Захист системи", MB_OK | MB_ICONWARNING);
+        return;
+    }
+
+    std::wstring msg = L"Ви дійсно бажаєте примусово завершити цей процес?\n\n"
+                       L"Процес:  " + name + L"\n"
+                       L"PID:     " + std::to_wstring(pid) + L"\n"
+                       L"Пам'ять: " + std::to_wstring(memMB) + L" MB\n\n"
+                       L"Усі незбережені дані в цьому додатку буде втрачено.";
+    int res = MessageBoxW(hWnd, msg.c_str(), L"Підтвердження завершення процесу", MB_YESNO | MB_ICONQUESTION);
+    if (res == IDYES) {
+        bool ok = SystemInfo::TerminateProcessByPid(pid);
+        if (ok) {
+            Logger::Info(L"Процеси", L"Користувач завершив процес: " + name + L" (PID " + std::to_wstring(pid) + L")");
+            TelemetryThread::RefreshPowerStatus();
+            InvalidateRect(hWnd, NULL, FALSE);
+        } else {
+            MessageBoxW(hWnd, L"Не вдалося завершити процес. Можливо, потрібні права адміністратора.", L"Помилка", MB_OK | MB_ICONERROR);
+        }
+    }
+}
+
 void GuiWindow::InitButtons() {
     s_buttons.clear();
 
@@ -72,7 +102,8 @@ void GuiWindow::InitButtons() {
     s_buttons.push_back({ 16, Rect(808, 12, 28, 26), L"—", false, false, Color(255, 100, 100, 100), Color(255, 40, 45, 55), Color(255, 22, 27, 34), -1 });
     s_buttons.push_back({ 17, Rect(842, 12, 28, 26), L"✕", false, false, Color(255, 255, 60, 60), Color(255, 80, 25, 25), Color(255, 22, 27, 34), -1 });
     s_buttons.push_back({ 21, Rect(650, 12, 145, 26), L"WIN SAVER: OFF", false, false, Color(255, 0, 230, 118), Color(40, 0, 230, 118), Color(30, 100, 110, 125), -1 });
-    s_buttons.push_back({ 20, Rect(630, 680, 225, 28), L"[Оновлення]", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), -1 });
+    s_buttons.push_back({ 25, Rect(485, 680, 145, 28), L"[🐞] Баг-репорт", false, false, Color(255, 234, 179, 8), Color(255, 45, 38, 20), Color(255, 22, 27, 34), -1 });
+    s_buttons.push_back({ 20, Rect(640, 680, 215, 28), L"[Оновлення]", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), -1 });
 
     // 5 Navigation Tabs (tab = -1): width = 160 each, gap = 7.5px
     s_buttons.push_back({ 100, Rect(25, 48, 160, 30), L"⚡ Головна", false, true, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), -1 });
@@ -133,19 +164,22 @@ void GuiWindow::InitButtons() {
     // CpuProcesses Tab Buttons (tab = 2)
     // =========================================================================
     s_buttons.push_back({ 107, Rect(25, 86, 180, 30), L"← Назад на головну", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 2 });
-    s_buttons.push_back({ 31, Rect(680, 86, 170, 30), L"[↻] Оновити процеси", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 2 });
+    s_buttons.push_back({ 31, Rect(475, 86, 160, 30), L"[↻] Оновити процеси", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 2 });
+    s_buttons.push_back({ 34, Rect(645, 86, 210, 30), L"[X] Завершити процес...", false, false, Color(255, 239, 68, 68), Color(255, 60, 20, 25), Color(255, 45, 15, 20), 2 });
 
     // =========================================================================
     // IGpuProcesses Tab Buttons (tab = 3)
     // =========================================================================
     s_buttons.push_back({ 108, Rect(25, 86, 180, 30), L"← Назад на головну", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 3 });
-    s_buttons.push_back({ 32, Rect(680, 86, 170, 30), L"[↻] Оновити процеси", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 3 });
+    s_buttons.push_back({ 32, Rect(475, 86, 160, 30), L"[↻] Оновити процеси", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 3 });
+    s_buttons.push_back({ 35, Rect(645, 86, 210, 30), L"[X] Завершити процес...", false, false, Color(255, 239, 68, 68), Color(255, 60, 20, 25), Color(255, 45, 15, 20), 3 });
 
     // =========================================================================
     // Devices / dGPU Tab Buttons (tab = 4)
     // =========================================================================
     s_buttons.push_back({ 104, Rect(25, 86, 180, 30), L"← Назад на головну", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 4 });
-    s_buttons.push_back({ 15, Rect(575, 86, 275, 30), L"[X] Зупинити всі процеси dGPU", false, false, Color(255, 239, 68, 68), Color(255, 60, 20, 25), Color(255, 45, 15, 20), 4 });
+    s_buttons.push_back({ 33, Rect(475, 86, 160, 30), L"[↻] Оновити процеси", false, false, Color(255, 0, 229, 255), Color(255, 30, 45, 60), Color(255, 22, 27, 34), 4 });
+    s_buttons.push_back({ 15, Rect(645, 86, 210, 30), L"[X] Зупинити процеси dGPU", false, false, Color(255, 239, 68, 68), Color(255, 60, 20, 25), Color(255, 45, 15, 20), 4 });
 }
 
 void GuiWindow::SetTab(GuiTab tab) {
@@ -309,7 +343,7 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc, const TelemetryData& td) {
 
     // Footer banner
     Font fFooter(L"Segoe UI", 8.2f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
-    DrawLabel(g, L"EnergySavior • Моніторинг та керування енергоспоживанням", fFooter, RectF(25, 686, 575, 18), textMuted);
+    DrawLabel(g, L"EnergySavior • Моніторинг та оптимізація", fFooter, RectF(25, 686, 455, 18), textMuted);
 
     }
     BitBlt(hdc, 0, 0, w, h, bufferDc, 0, 0, SRCCOPY);
@@ -615,7 +649,8 @@ void GuiWindow::PaintCpuProcesses(Graphics& g, const TelemetryData& td, int /*w*
     g.DrawString(L"CPU, %", -1, &fCol, PointF(360, 222), &textMuted);
     g.DrawString(L"Пам'ять (RAM)", -1, &fCol, PointF(500, 222), &textMuted);
     g.DrawString(L"Оцінка, Вт", -1, &fCol, PointF(615, 222), &textMuted);
-    g.DrawString(L"Категорія", -1, &fCol, PointF(715, 222), &textMuted);
+    g.DrawString(L"Категорія", -1, &fCol, PointF(710, 222), &textMuted);
+    g.DrawString(L"Дія", -1, &fCol, PointF(815, 222), &textMuted);
 
     Pen linePen(Color(255, 33, 41, 54), 1.0f);
     g.DrawLine(&linePen, 35, 242, 845, 242);
@@ -649,7 +684,8 @@ void GuiWindow::PaintCpuProcesses(Graphics& g, const TelemetryData& td, int /*w*
         std::wstring wattStr = FormatWatts(p.estimatedWatts);
         g.DrawString(wattStr.c_str(), -1, &fRowBold, PointF(615, (REAL)rowY + 6), &textCyan);
 
-        DrawLabel(g, p.role, fRow, RectF(715, (REAL)rowY + 6, 130, 22), textMuted);
+        DrawLabel(g, p.role, fRow, RectF(710, (REAL)rowY + 6, 95, 22), textMuted);
+        g.DrawString(L"[✕]", -1, &fRowBold, PointF(815, (REAL)rowY + 6), &textRed);
 
         rowY += 34;
     }
@@ -664,6 +700,7 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
     SolidBrush textMuted(Color(255, 139, 148, 158));
     SolidBrush textCyan(Color(255, 0, 229, 255));
     SolidBrush textGreen(Color(255, 0, 230, 118));
+    SolidBrush textRed(Color(255, 255, 23, 68));
 
     // Top Summary Banner (Y: 124, H: 65, W: 840)
     DrawCard(g, 20, 124, 840, 65, L"МОНІТОРИНГ ВБУДОВАНОЇ ГРАФІКИ (iGPU)");
@@ -685,7 +722,8 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
     g.DrawString(L"Додаток / Процес", -1, &fCol, PointF(110, 222), &textMuted);
     g.DrawString(L"Призначення", -1, &fCol, PointF(360, 222), &textMuted);
     g.DrawString(L"Пам'ять (RAM)", -1, &fCol, PointF(580, 222), &textMuted);
-    g.DrawString(L"Визначення GPU", -1, &fCol, PointF(690, 222), &textMuted);
+    g.DrawString(L"Визначення GPU", -1, &fCol, PointF(680, 222), &textMuted);
+    g.DrawString(L"Дія", -1, &fCol, PointF(815, 222), &textMuted);
 
     Pen linePen(Color(255, 33, 41, 54), 1.0f);
     g.DrawLine(&linePen, 35, 242, 845, 242);
@@ -710,7 +748,8 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
         std::wstring memStr = std::to_wstring(p.memMB) + L" MB";
         g.DrawString(memStr.c_str(), -1, &fRow, PointF(580, (REAL)rowY + 6), &textWhite);
 
-        g.DrawString(L"Не підтверджено", -1, &fRowBold, PointF(690, (REAL)rowY + 6), &textGreen);
+        g.DrawString(L"Не підтверджено", -1, &fRowBold, PointF(680, (REAL)rowY + 6), &textGreen);
+        g.DrawString(L"[✕]", -1, &fRowBold, PointF(815, (REAL)rowY + 6), &textRed);
 
         rowY += 34;
     }
@@ -756,6 +795,7 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
         g.DrawString(L"Назва процесу", -1, &fTableHeader, PointF(120, 180), &textMuted);
         g.DrawString(L"Пам'ять VRAM", -1, &fTableHeader, PointF(380, 180), &textMuted);
         g.DrawString(L"Вплив на батарею", -1, &fTableHeader, PointF(520, 180), &textMuted);
+        g.DrawString(L"Дія", -1, &fTableHeader, PointF(805, 180), &textMuted);
 
         Font fRow(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
         int yPos = 205;
@@ -765,6 +805,7 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
             DrawLabel(g, p.name, fRow, RectF(120, (REAL)yPos, 248, 22), textWhite);
             g.DrawString((std::to_wstring(p.memoryMB) + L" MB").c_str(), -1, &fRow, PointF(380, (REAL)yPos), &textCyan);
             g.DrawString(L"Утримує dGPU активною (+35..50W)", -1, &fRow, PointF(520, (REAL)yPos), &textRed);
+            g.DrawString(L"[✕]", -1, &fRow, PointF(805, (REAL)yPos), &textRed);
             yPos += 24;
         }
 
@@ -826,9 +867,51 @@ bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
                 case 101: case 22: SetTab(GuiTab::Graphs); break;
                 case 105: case 24: SetTab(GuiTab::CpuProcesses); break;
                 case 106: SetTab(GuiTab::IGpuProcesses); break;
-                case 102: case 23: SetTab(GuiTab::Devices); break;
+                case 102: case 23:
+                    SetTab(GuiTab::Devices);
+                    GpuController::RequestImmediateProbe();
+                    break;
                 case 103: case 104: case 107: case 108: SetTab(GuiTab::Dashboard); break;
-                case 31: case 32: TelemetryThread::RefreshPowerStatus(); break;
+                case 31: case 32: case 33:
+                    GpuController::RequestImmediateProbe();
+                    TelemetryThread::RefreshPowerStatus();
+                    InvalidateRect(hWnd, NULL, FALSE);
+                    break;
+                case 25: {
+                    int res = MessageBoxW(hWnd,
+                        L"Бажаєте повідомити про баг або проблему на GitHub?\n\n"
+                        L"Натисніть 'Так', щоб відкрити сторінку GitHub Issues та папку з логами програми.",
+                        L"EnergySavior — Баг-репорт", MB_YESNO | MB_ICONINFORMATION);
+                    if (res == IDYES) {
+                        Logger::OpenLogFile();
+                        ShellExecuteW(NULL, L"open", APP_ISSUES_URL, NULL, NULL, SW_SHOWNORMAL);
+                    }
+                    break;
+                }
+                case 34: {
+                    TelemetryData td = TelemetryThread::GetData();
+                    for (const auto& p : td.cpuProcesses) {
+                        if (p.pid > 4 && _wcsicmp(p.name.c_str(), L"dwm.exe") != 0 &&
+                            _wcsicmp(p.name.c_str(), L"explorer.exe") != 0 &&
+                            _wcsicmp(p.name.c_str(), L"EnergySavior.exe") != 0) {
+                            PromptTerminateProcess(hWnd, p.pid, p.name, p.memMB);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case 35: {
+                    TelemetryData td = TelemetryThread::GetData();
+                    for (const auto& p : td.iGpuProcesses) {
+                        if (p.pid > 4 && _wcsicmp(p.name.c_str(), L"dwm.exe") != 0 &&
+                            _wcsicmp(p.name.c_str(), L"explorer.exe") != 0 &&
+                            _wcsicmp(p.name.c_str(), L"EnergySavior.exe") != 0) {
+                            PromptTerminateProcess(hWnd, p.pid, p.name, p.memMB);
+                            break;
+                        }
+                    }
+                    break;
+                }
                 case 26: s_selectedGraphSeconds = 30; break;
                 case 27: s_selectedGraphSeconds = 60; break;
                 case 28: s_selectedGraphSeconds = 300; break;
@@ -949,6 +1032,29 @@ bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
             return true;
         }
     }
+
+    // Process table row clicks on CPU (tab 2), iGPU (tab 3), or dGPU (tab 4)
+    TelemetryData td = TelemetryThread::GetData();
+    if (s_currentTab == GuiTab::CpuProcesses || s_currentTab == GuiTab::IGpuProcesses) {
+        if (x >= 30 && x <= 850 && y >= 250 && y <= 624) {
+            size_t rowIndex = (size_t)((y - 250) / 34);
+            const auto& procs = (s_currentTab == GuiTab::CpuProcesses) ? td.cpuProcesses : td.iGpuProcesses;
+            if (rowIndex < procs.size()) {
+                PromptTerminateProcess(hWnd, procs[rowIndex].pid, procs[rowIndex].name, procs[rowIndex].memMB);
+                return true;
+            }
+        }
+    } else if (s_currentTab == GuiTab::Devices) {
+        if (x >= 35 && x <= 845 && y >= 205 && y <= 305) {
+            size_t rowIndex = (size_t)((y - 205) / 24);
+            if (rowIndex < td.gpu.processes.size()) {
+                const auto& p = td.gpu.processes[rowIndex];
+                PromptTerminateProcess(hWnd, p.pid, p.name, p.memoryMB);
+                return true;
+            }
+        }
+    }
+
     return false;
 }
 
