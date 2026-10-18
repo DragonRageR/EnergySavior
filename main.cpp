@@ -2,6 +2,8 @@
 #define _UNICODE
 #include <windows.h>
 #include <shellapi.h>
+#include <windowsx.h>
+#include <algorithm>
 #include <gdiplus.h>
 #include <string>
 
@@ -52,15 +54,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 1;
 
         case WM_LBUTTONDOWN: {
-            int x = LOWORD(lParam);
-            int y = HIWORD(lParam);
+            int x = GET_X_LPARAM(lParam);
+            int y = GET_Y_LPARAM(lParam);
 
             if (GuiWindow::HandleClick(hWnd, x, y)) {
                 return 0;
             }
 
             // Drag window by clicking header (y < 46)
-            if (y < 46) {
+            RECT client;
+            GetClientRect(hWnd, &client);
+            float scale = (std::min)(client.right / 880.0f, client.bottom / 720.0f);
+            if (y < 46 * scale) {
                 ReleaseCapture();
                 SendMessage(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
                 return 0;
@@ -70,9 +75,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_MOUSEMOVE: {
-            int x = LOWORD(lParam);
-            int y = HIWORD(lParam);
+            int x = GET_X_LPARAM(lParam);
+            int y = GET_Y_LPARAM(lParam);
+            TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, hWnd, 0 };
+            TrackMouseEvent(&tracking);
             GuiWindow::HandleMouseMove(hWnd, x, y);
+            return 0;
+        }
+
+        case WM_MOUSELEAVE:
+            GuiWindow::HandleMouseMove(hWnd, -1, -1);
+            return 0;
+
+        case WM_DPICHANGED: {
+            const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+            SetWindowPos(hWnd, NULL, suggested->left, suggested->top,
+                         suggested->right - suggested->left, suggested->bottom - suggested->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+            InvalidateRect(hWnd, NULL, FALSE);
             return 0;
         }
 
@@ -218,18 +238,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCmd
     wc.lpszClassName = L"EnergySaviorWindowClass_v2";
     RegisterClassExW(&wc);
 
-    // Центрування вікна на робочому столі
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int screenH = GetSystemMetrics(SM_CYSCREEN);
-    int posX = (screenW - WINDOW_WIDTH) / 2;
-    int posY = (screenH - WINDOW_HEIGHT) / 2;
+    // Масштабуємо вікно відповідно до DPI та доступної робочої області.
+    RECT workArea;
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
+    HDC screen = GetDC(NULL);
+    float scale = GetDeviceCaps(screen, LOGPIXELSX) / 96.0f;
+    ReleaseDC(NULL, screen);
+    scale = (std::min)(scale, (std::min)((workArea.right - workArea.left) / 880.0f,
+                                       (workArea.bottom - workArea.top) / 720.0f));
+    int windowWidth = (int)(WINDOW_WIDTH * scale);
+    int windowHeight = (int)(WINDOW_HEIGHT * scale);
+    int posX = workArea.left + (workArea.right - workArea.left - windowWidth) / 2;
+    int posY = workArea.top + (workArea.bottom - workArea.top - windowHeight) / 2;
 
     HWND hWnd = CreateWindowExW(
         WS_EX_APPWINDOW,
         wc.lpszClassName,
         L"EnergySavior",
         WS_POPUP,
-        posX, posY, WINDOW_WIDTH, WINDOW_HEIGHT,
+        posX, posY, windowWidth, windowHeight,
         NULL, NULL, hInstance, NULL
     );
 

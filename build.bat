@@ -9,6 +9,12 @@ echo  EnergySavior: Native High-Performance Build Engine
 echo  Target: %MODE% (C++20 x86-64-v2)
 echo ======================================================================
 
+if /I "%MODE%"=="test" (
+    call run_tests.bat %*
+    if errorlevel 1 goto :FAILED
+    goto :END
+)
+
 rem 1. Automatically stop running instance to prevent "Permission Denied" file lock
 tasklist /fi "imagename eq EnergySavior.exe" 2>nul | find /i "EnergySavior.exe" >nul
 if not errorlevel 1 (
@@ -23,10 +29,6 @@ if not errorlevel 1 (
     timeout /t 1 /nobreak >nul
 )
 
-if /I "%MODE%"=="test" (
-    call run_tests.bat %*
-    goto :END
-)
 
 if /I "%MODE%"=="debug" (
     echo [BUILD] Compiling Debug binary with symbols and runtime diagnostics...

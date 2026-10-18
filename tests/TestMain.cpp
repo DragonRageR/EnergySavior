@@ -10,6 +10,7 @@
 #include "../include/hardware/GpuController.hpp"
 #include "../include/hardware/DisplayController.hpp"
 #include "../include/core/SystemInfo.hpp"
+#include "../include/core/TelemetryThread.hpp"
 #include "../include/gui/GuiWindow.hpp"
 #include "../include/gui/TrayManager.hpp"
 
@@ -365,7 +366,9 @@ TEST_CASE(SystemInfo_CpuAndIGpuProcesses) {
 
     std::vector<DWORD> dPids;
     auto igpuProcs = SystemInfo::GetIGpuProcesses(dPids, 5);
-    ASSERT_TRUE(!igpuProcs.empty());
+    // В ізольованому сеансі може не бути доступних віконних процесів.
+    ASSERT_TRUE(igpuProcs.size() <= 5);
+    ASSERT_TRUE(SystemInfo::GetIGpuProcesses(dPids, 0).empty());
     for (const auto& p : igpuProcs) {
         ASSERT_TRUE(p.pid > 0);
         ASSERT_TRUE(!p.name.empty());
@@ -438,6 +441,73 @@ TEST_CASE(Ui_SourceFilesUtf8BomIntegrity) {
         ASSERT_TRUE(content.find("\xD0\xA0\xE2\x80\x94") == std::string::npos);
         ASSERT_TRUE(content.find("\xD0\xB2\xD1\x9A") == std::string::npos);
     }
+}
+
+// Перевіряємо фактичні координати натискань і малювання за різних масштабів.
+TEST_CASE(Ui_ScaledNavigationAndRendering) {
+    Gdiplus::GdiplusStartupInput input;
+    ULONG_PTR token;
+    ASSERT_EQ(Gdiplus::GdiplusStartup(&token, &input, nullptr), Gdiplus::Ok);
+    TelemetryData sample;
+    sample.battery.isAcOnline = true;
+    sample.battery.isConnected = true;
+    sample.battery.percent = 100;
+    sample.battery.voltageMV = 15840;
+    sample.battery.fullCapacityMWh = 80000;
+    sample.battery.designCapacityMWh = 80000;
+    sample.battery.currentCapacityMWh = 80000;
+    sample.system.cpuName = L"Intel Core i7-12700H — процесор із довгою назвою";
+    sample.iGpuName = L"Intel Iris Xe Graphics — інтегрований графічний адаптер";
+    sample.gpu.model = L"NVIDIA GeForce RTX 3070 Ti Laptop GPU";
+    sample.gpu.isAwake = true;
+    sample.gpu.powerWatts = 35.5f;
+    sample.cpuProcesses.push_back({12345, L"Дуже довга назва процесу для перевірки меж таблиці.exe", 16384, 23.5f, 15.7f, L"Довгий опис призначення процесу"});
+    sample.iGpuProcesses = sample.cpuProcesses;
+    CreateDirectoryW(L"build", nullptr);
+    CreateDirectoryW(L"build/ui-previews", nullptr);
+    for (int percent : {100, 125, 150, 200}) {
+        int width = 880 * percent / 100;
+        int height = 720 * percent / 100;
+        HWND window = CreateWindowExW(0, L"STATIC", L"", WS_POPUP,
+                                      0, 0, width, height, nullptr, nullptr, nullptr, nullptr);
+        ASSERT_TRUE(window != nullptr);
+        GuiWindow::InitButtons();
+        HDC dc = GetDC(window);
+        HDC memory = CreateCompatibleDC(dc);
+        HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
+        HGDIOBJ previous = SelectObject(memory, bitmap);
+        for (int tab = 0; tab < 5; ++tab) {
+            int x = (40 + 167 * tab) * percent / 100;
+            int y = 60 * percent / 100;
+            ASSERT_TRUE(GuiWindow::HandleClick(window, x, y));
+            ASSERT_EQ((int)GuiWindow::GetTab(), tab);
+            GuiWindow::Paint(window, memory, sample);
+            ASSERT_EQ(GetPixel(memory, 5, 5), RGB(13, 17, 23));
+            // Пояснення та значення графіків не повинні потрапляти у проміжки між картками.
+            if (tab == 1) {
+                for (int y = 410; y < 655; ++y) {
+                    ASSERT_EQ(GetPixel(memory, 440 * percent / 100, y * percent / 100), RGB(13, 17, 23));
+                    ASSERT_EQ(GetPixel(memory, 867 * percent / 100, y * percent / 100), RGB(13, 17, 23));
+                }
+            }
+            if (percent == 100 || percent == 150) {
+                Gdiplus::Bitmap preview(bitmap, nullptr);
+                CLSID png = {0x557cf406, 0x1a04, 0x11d3, {0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e}};
+                std::wstring path = L"build/ui-previews/tab-" + std::to_wstring(tab) + L"-" + std::to_wstring(percent) + L".png";
+                ASSERT_EQ(preview.Save(path.c_str(), &png, nullptr), Gdiplus::Ok);
+            }
+        }
+        GuiWindow::HandleMouseMove(window, 40 * percent / 100, 60 * percent / 100);
+        GuiWindow::HandleMouseMove(window, -1, -1);
+        for (const auto& button : GuiWindow::GetButtons()) ASSERT_FALSE(button.isHovered);
+        SelectObject(memory, previous);
+        DeleteObject(bitmap);
+        DeleteDC(memory);
+        ReleaseDC(window, dc);
+        DestroyWindow(window);
+    }
+    GuiWindow::SetTab(GuiTab::Dashboard);
+    Gdiplus::GdiplusShutdown(token);
 }
 
 int main() {

@@ -51,6 +51,8 @@ private:
 public:
     static void InitButtons();
     static void Paint(HWND hWnd, HDC hdc);
+    // Малювання готового знімка без опитування обладнання; також для відтворюваних тестів.
+    static void Paint(HWND hWnd, HDC hdc, const struct TelemetryData& td);
     static bool HandleClick(HWND hWnd, int x, int y);
     static void HandleMouseMove(HWND hWnd, int x, int y);
     static void SetTab(GuiTab tab);

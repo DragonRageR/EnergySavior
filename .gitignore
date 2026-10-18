@@ -18,3 +18,6 @@
 
 # Local config cache
 config.ini
+
+# Generated UI verification images
+build/ui-previews/

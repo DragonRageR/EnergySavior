@@ -20,6 +20,15 @@
 
 using namespace Gdiplus;
 
+// Текст завжди залишається в межах своєї картки або колонки.
+static void DrawLabel(Graphics& g, const std::wstring& text, const Font& font,
+                      const RectF& bounds, const Brush& brush, bool wrap = false) {
+    StringFormat format;
+    format.SetTrimming(StringTrimmingEllipsisCharacter);
+    if (!wrap) format.SetFormatFlags(StringFormatFlagsNoWrap);
+    g.DrawString(text.c_str(), -1, &font, bounds, &format, &brush);
+}
+
 static std::wstring FormatWatts(float w) {
     wchar_t buf[32];
     swprintf_s(buf, L"%.1f W", w);
@@ -28,7 +37,8 @@ static std::wstring FormatWatts(float w) {
 
 void GuiWindow::DrawRoundedRect(Graphics& g, const Rect& rc, int radius, const Brush& brush, const Pen* pen) {
     GraphicsPath path;
-    int d = radius * 2;
+    if (rc.Width <= 0 || rc.Height <= 0) return;
+    int d = (std::min)(radius * 2, (std::min)(rc.Width, rc.Height));
     path.AddArc(rc.X, rc.Y, d, d, 180, 90);
     path.AddArc(rc.X + rc.Width - d, rc.Y, d, d, 270, 90);
     path.AddArc(rc.X + rc.Width - d, rc.Y + rc.Height - d, d, d, 0, 90);
@@ -47,9 +57,9 @@ void GuiWindow::DrawCard(Graphics& g, int x, int y, int w, int h, const std::wst
     DrawRoundedRect(g, rc, 8, bg, &border);
 
     if (!title.empty()) {
-        Font fTitle(L"Segoe UI", 8.8f, FontStyleBold);
+        Font fTitle(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
         SolidBrush bTitle(Color(255, 139, 148, 158));
-        g.DrawString(title.c_str(), -1, &fTitle, PointF((REAL)x + 15, (REAL)y + 12), &bTitle);
+        g.DrawString(title.c_str(), -1, &fTitle, PointF((REAL)x + 15, (REAL)y + 10), &bTitle);
     }
 }
 
@@ -83,12 +93,12 @@ void GuiWindow::InitButtons() {
     s_buttons.push_back({ 24, Rect(655, 256, 190, 36), L"■ Процеси CPU  >", false, false, Color(255, 0, 229, 255), Color(255, 20, 45, 60), Color(255, 26, 32, 42), 0 });
 
     // Refresh Rate
-    s_buttons.push_back({ 2, Rect(30, 375, 195, 34), L"60 Hz (Енергозбереження)", false, false, Color(255, 0, 230, 118), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
-    s_buttons.push_back({ 3, Rect(235, 375, 195, 34), L"144 Hz (Плавність)", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
+    s_buttons.push_back({ 2, Rect(30, 381, 195, 34), L"60 Hz (Енергозбереження)", false, false, Color(255, 0, 230, 118), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
+    s_buttons.push_back({ 3, Rect(235, 381, 195, 34), L"144 Hz (Плавність)", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
 
     // CPU Boost
-    s_buttons.push_back({ 4, Rect(450, 375, 195, 34), L"Boost OFF (~2.4 GHz)", false, false, Color(255, 0, 230, 118), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
-    s_buttons.push_back({ 5, Rect(655, 375, 195, 34), L"Boost ON (до 4.4 GHz)", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
+    s_buttons.push_back({ 4, Rect(450, 381, 195, 34), L"Boost OFF (~2.4 GHz)", false, false, Color(255, 0, 230, 118), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
+    s_buttons.push_back({ 5, Rect(655, 381, 195, 34), L"Boost ON (до 4.4 GHz)", false, false, Color(255, 0, 229, 255), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
 
     // Thermal Profile: Quiet, Balance, Performance
     s_buttons.push_back({ 6, Rect(30, 439, 125, 34), L"Тихий", false, false, Color(255, 59, 130, 246), Color(255, 33, 41, 54), Color(255, 22, 27, 34), 0 });
@@ -140,6 +150,8 @@ void GuiWindow::InitButtons() {
 
 void GuiWindow::SetTab(GuiTab tab) {
     s_currentTab = tab;
+    s_hoveredBtnId = -1;
+    for (auto& button : s_buttons) button.isHovered = false;
     for (auto& btn : s_buttons) {
         if (btn.id == 100) btn.isActive = (s_currentTab == GuiTab::Dashboard);
         else if (btn.id == 101) btn.isActive = (s_currentTab == GuiTab::Graphs);
@@ -150,13 +162,27 @@ void GuiWindow::SetTab(GuiTab tab) {
 }
 
 void GuiWindow::Paint(HWND hWnd, HDC hdc) {
+    Paint(hWnd, hdc, TelemetryThread::GetData());
+}
+
+void GuiWindow::Paint(HWND hWnd, HDC hdc, const TelemetryData& td) {
     RECT rc;
     GetClientRect(hWnd, &rc);
     int w = rc.right - rc.left;
     int h = rc.bottom - rc.top;
 
-    Bitmap backBuffer(w, h);
-    Graphics g(&backBuffer);
+    if (w <= 0 || h <= 0) return;
+    HDC bufferDc = CreateCompatibleDC(hdc);
+    HBITMAP buffer = CreateCompatibleBitmap(hdc, w, h);
+    if (!bufferDc || !buffer) {
+        if (buffer) DeleteObject(buffer);
+        if (bufferDc) DeleteDC(bufferDc);
+        return;
+    }
+    HGDIOBJ previous = SelectObject(bufferDc, buffer);
+    {
+    Graphics g(bufferDc);
+    g.SetPageUnit(UnitPixel);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
 
@@ -164,12 +190,13 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
     SolidBrush bgBrush(Color(255, 13, 17, 23));
     g.FillRectangle(&bgBrush, 0, 0, w, h);
 
-    TelemetryData td = TelemetryThread::GetData();
+    const float scale = (std::min)(w / 880.0f, h / 720.0f);
+    g.ScaleTransform(scale, scale);
 
     // 1. Header (Y: 10, H: 38)
-    Font fApp(L"Segoe UI", 12.0f, FontStyleBold);
-    Font fSub(L"Segoe UI", 8.5f, FontStyleRegular);
-    Font fStatus(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fApp(L"Segoe UI", 12.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fSub(L"Segoe UI", 8.5f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+    Font fStatus(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
     SolidBrush textWhite(Color(255, 240, 246, 252));
     SolidBrush textMuted(Color(255, 139, 148, 158));
     SolidBrush textCyan(Color(255, 0, 229, 255));
@@ -178,7 +205,7 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
 
     g.DrawString(L"ENERGY SAVIOR", -1, &fApp, PointF(25, 10), &textWhite);
     std::wstring sysSub = td.system.cpuName + L"  |  " + (td.gpu.model.empty() ? L"Вбудована графіка" : td.gpu.model);
-    g.DrawString(sysSub.c_str(), -1, &fSub, PointF(25, 30), &textMuted);
+    DrawLabel(g, sysSub, fSub, RectF(25, 30, 605, 17), textMuted);
 
     // Dynamic button state updates
     for (auto& btn : s_buttons) {
@@ -246,10 +273,11 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
     }
 
     // Paint Buttons
-    Font fBtn(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fBtn(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
     StringFormat sf;
     sf.SetAlignment(StringAlignmentCenter);
     sf.SetLineAlignment(StringAlignmentCenter);
+    sf.SetTrimming(StringTrimmingEllipsisCharacter);
 
     for (const auto& btn : s_buttons) {
         if (btn.tab != -1 && btn.tab != (int)s_currentTab) continue;
@@ -275,16 +303,19 @@ void GuiWindow::Paint(HWND hWnd, HDC hdc) {
 
         DrawRoundedRect(g, btn.bounds, 6, btnBg, &borderPen);
 
-        RectF rf((REAL)btn.bounds.X, (REAL)btn.bounds.Y, (REAL)btn.bounds.Width, (REAL)btn.bounds.Height);
+        RectF rf((REAL)btn.bounds.X + 6, (REAL)btn.bounds.Y + 2, (REAL)btn.bounds.Width - 12, (REAL)btn.bounds.Height - 4);
         g.DrawString(btn.text.c_str(), -1, &fBtn, rf, &sf, &btnTxt);
     }
 
     // Footer banner
-    Font fFooter(L"Segoe UI", 8.2f, FontStyleRegular);
-    g.DrawString(L"EnergySavior: Розумний моніторинг та оптимізація енергоспоживання ПК та ноутбуків.", -1, &fFooter, PointF(25, 686), &textMuted);
+    Font fFooter(L"Segoe UI", 8.2f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+    DrawLabel(g, L"EnergySavior • Моніторинг та керування енергоспоживанням", fFooter, RectF(25, 686, 575, 18), textMuted);
 
-    Graphics screenG(hdc);
-    screenG.DrawImage(&backBuffer, 0, 0, w, h);
+    }
+    BitBlt(hdc, 0, 0, w, h, bufferDc, 0, 0, SRCCOPY);
+    SelectObject(bufferDc, previous);
+    DeleteObject(buffer);
+    DeleteDC(bufferDc);
 }
 
 void GuiWindow::PaintDashboard(Graphics& g, const TelemetryData& td, int /*w*/, int /*h*/) {
@@ -302,50 +333,50 @@ void GuiWindow::PaintDashboard(Graphics& g, const TelemetryData& td, int /*w*/, 
     Pen heroBorder(heroBorderCol, 1.5f);
     DrawRoundedRect(g, heroRc, 8, heroBg, &heroBorder);
 
-    Font fHeroTitle(L"Segoe UI", 11.5f, FontStyleBold);
-    Font fHeroDesc(L"Segoe UI", 9.0f, FontStyleRegular);
+    Font fHeroTitle(L"Segoe UI", 11.5f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fHeroDesc(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
     if (td.isEcoMode) {
-        g.DrawString(L"[ECO] РЕЖИМ 'МАКСИМАЛЬНЕ ЕНЕРГОЗБЕРЕЖЕННЯ'", -1, &fHeroTitle, PointF(45, 104), &textGreen);
-        g.DrawString(L"• Екран: 60 Hz (Економія ~2.5W)  |  CPU Boost: Вимкнено (~2.4 GHz)  |  Тихий режим кулерів\n• Windows: Енергозбереження  |  Ноутбук працює безшумно, прохолодно і максимально довго від батареї.", -1, &fHeroDesc, PointF(45, 134), &textWhite);
+        g.DrawString(L"[ECO] ЕНЕРГОЗБЕРЕЖЕННЯ", -1, &fHeroTitle, PointF(45, 104), &textGreen);
+        DrawLabel(g, L"Екран 60 Hz • Boost вимкнено • Тихе охолодження\nПрофіль для довшої роботи від батареї.", fHeroDesc, RectF(45, 134, 520, 44), textWhite, true);
     } else {
-        g.DrawString(L"[MAX] РЕЖИМ 'МАКСИМАЛЬНА ПРОДУКТИВНІСТЬ'", -1, &fHeroTitle, PointF(45, 104), &textCyan);
-        g.DrawString(L"• Екран: 144 Hz (Плавність)  |  CPU Boost: Агресивний (до 4.4 GHz)  |  Збалансоване охолодження\n• Windows: Збалансований  |  Повна швидкість системи для роботи та ігор на 100%.", -1, &fHeroDesc, PointF(45, 134), &textWhite);
+        g.DrawString(L"[MAX] МАКСИМАЛЬНА ПРОДУКТИВНІСТЬ", -1, &fHeroTitle, PointF(45, 104), &textCyan);
+        DrawLabel(g, L"Екран 144 Hz • Boost увімкнено\nПрофіль для роботи та ігор.", fHeroDesc, RectF(45, 134, 520, 44), textWhite, true);
     }
 
     // 2. Middle Row Cards (Y: 198, H: 125)
     DrawCard(g, 20, 198, 415, 125, L"ЗАРЯД ТА ЖИВЛЕННЯ");
-    DrawCard(g, 445, 198, 415, 125, L"СПОЖИВАННЯ СИСТЕМИ ТА КОМПОНЕНТІВ");
+    DrawCard(g, 445, 198, 415, 125, L"СПОЖИВАННЯ СИСТЕМИ");
 
     // Left card: Battery
-    Font fBigNum(L"Segoe UI", 26.0f, FontStyleBold);
-    Font fSmallLbl(L"Segoe UI", 8.8f, FontStyleRegular);
+    Font fBigNum(L"Segoe UI", 26.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fSmallLbl(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
     std::wstring batPctStr = std::to_wstring(td.battery.percent) + L"%";
     Color batCol = (td.battery.percent > 20) ? Color(255, 0, 230, 118) : Color(255, 239, 68, 68);
     SolidBrush bBat(batCol);
     g.DrawString(batPctStr.c_str(), -1, &fBigNum, PointF(35, 222), &bBat);
 
-    Rect barBg(130, 240, 280, 14);
+    Rect barBg(150, 240, 260, 14);
     SolidBrush bBarBg(Color(255, 33, 41, 54));
     DrawRoundedRect(g, barBg, 4, bBarBg);
 
-    int fillW = (int)((td.battery.percent / 100.0f) * 280);
+    int fillW = (int)((std::clamp(td.battery.percent, 0, 100) / 100.0f) * 260);
     if (fillW > 0) {
-        Rect barFill(130, 240, fillW, 14);
+        Rect barFill(150, 240, fillW, 14);
         SolidBrush bBarFill(Color(255, 0, 229, 255));
         DrawRoundedRect(g, barFill, 4, bBarFill);
     }
 
     std::wstringstream ssCap;
-    ssCap << L"Ємність: " << td.battery.currentCapacityMWh << L" / " << td.battery.fullCapacityMWh << L" mWh (" 
+    ssCap << L"Ємність: " << td.battery.currentCapacityMWh << L" / " << td.battery.fullCapacityMWh << L" mWh ("
           << std::fixed << std::setprecision(1) << td.battery.healthPercent << L"% Здоров'я, " << td.battery.cycleCount << L" циклів)";
-    g.DrawString(ssCap.str().c_str(), -1, &fSmallLbl, PointF(35, 274), &textWhite);
+    DrawLabel(g, ssCap.str(), fSmallLbl, RectF(35, 274, 385, 18), textWhite);
 
     std::wstringstream ssVolt;
     ssVolt << L"Напруга: " << std::fixed << std::setprecision(2) << (td.battery.voltageMV / 1000.0) << L" V  |  Живлення: "
            << (td.battery.isAcOnline ? L"Підключено до 220V" : L"Робота від батареї (DC)");
-    g.DrawString(ssVolt.str().c_str(), -1, &fSmallLbl, PointF(35, 294), &textMuted);
+    DrawLabel(g, ssVolt.str(), fSmallLbl, RectF(35, 294, 385, 18), textMuted);
 
     // Right card: Power Breakdown
     auto hist = TelemetryThread::GetPowerHistory(60);
@@ -354,17 +385,17 @@ void GuiWindow::PaintDashboard(Graphics& g, const TelemetryData& td, int /*w*/, 
     g.DrawString(pwrStr.c_str(), -1, &fBigNum, PointF(460, 222), &textCyan);
 
     std::wstring pwrSub = td.battery.isAcOnline ? L"Мережа 220V (Сумарне TDP)" : L"Розряд батареї (Датчик)";
-    g.DrawString(pwrSub.c_str(), -1, &fSmallLbl, PointF(460, 268), &textGreen);
+    DrawLabel(g, pwrSub, fSmallLbl, RectF(460, 268, 185, 18), textGreen);
 
     std::wstring compSummary = L"Екран: " + FormatWatts(td.displayWatts) + L" (" + std::to_wstring(td.brightness) + L"%) | CPU: " + FormatWatts(td.cpuWatts);
-    g.DrawString(compSummary.c_str(), -1, &fSmallLbl, PointF(460, 294), &textMuted);
+    DrawLabel(g, compSummary, fSmallLbl, RectF(460, 298, 385, 18), textMuted);
 
     // 3. System Controls Card (Y: 331, H: 226, W: 840)
     DrawCard(g, 20, 331, 840, 226, L"КЕРУВАННЯ СИСТЕМОЮ ТА ПРИСТРОЯМИ");
 
-    Font fGroup(L"Segoe UI", 9.0f, FontStyleBold);
-    g.DrawString(L"Частота екрану:", -1, &fGroup, PointF(30, 355), &textWhite);
-    g.DrawString(L"Intel Turbo Boost (Процесор):", -1, &fGroup, PointF(450, 355), &textWhite);
+    Font fGroup(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    g.DrawString(L"Частота екрану:", -1, &fGroup, PointF(30, 359), &textWhite);
+    g.DrawString(L"Intel Turbo Boost (Процесор):", -1, &fGroup, PointF(450, 359), &textWhite);
     g.DrawString(L"Режим охолодження (TDP):", -1, &fGroup, PointF(30, 418), &textWhite);
     g.DrawString(L"Режим відеокарти (MUX Switch):", -1, &fGroup, PointF(450, 418), &textWhite);
     g.DrawString(L"Підсвітка, автоматизація та журнал:", -1, &fGroup, PointF(30, 482), &textWhite);
@@ -372,17 +403,17 @@ void GuiWindow::PaintDashboard(Graphics& g, const TelemetryData& td, int /*w*/, 
     // 4. NVIDIA Watchdog Card (Y: 565, H: 104, W: 840)
     DrawCard(g, 20, 565, 840, 104, L"NVIDIA GEFORCE RTX WATCHDOG МОНІТОРИНГ");
 
-    Font fGpuName(L"Segoe UI", 10.0f, FontStyleBold);
-    Font fGpuStatus(L"Segoe UI", 8.8f, FontStyleRegular);
+    Font fGpuName(L"Segoe UI", 10.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fGpuStatus(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
     std::wstring gpuHeader = td.gpu.model + L": ";
     if (td.gpu.isAwake) {
         gpuHeader += L"АКТИВНА (" + std::to_wstring((int)td.gpu.powerWatts) + L" W, " + std::to_wstring(td.gpu.temperatureC) + L" °C)";
-        g.DrawString(gpuHeader.c_str(), -1, &fGpuName, PointF(35, 588), &textRed);
+        DrawLabel(g, gpuHeader, fGpuName, RectF(35, 600, 395, 21), textRed);
 
         std::wstring procList = L"[!] Процеси на dGPU (" + std::to_wstring(td.gpu.processes.size()) + L"): ";
         if (td.gpu.processes.empty()) {
-            procList = L"[!] Завершує роботу (очікування переходу в сон)";
+            procList = L"[!] dGPU активна; доступних процесів не знайдено";
         } else {
             for (size_t i = 0; i < td.gpu.processes.size(); i++) {
                 if (i > 0) procList += L",  ";
@@ -393,14 +424,14 @@ void GuiWindow::PaintDashboard(Graphics& g, const TelemetryData& td, int /*w*/, 
                 }
             }
         }
-        RectF rProc(35.0f, 612.0f, 395.0f, 48.0f);
+        RectF rProc(35.0f, 626.0f, 395.0f, 36.0f);
         StringFormat sfWrap;
         sfWrap.SetTrimming(StringTrimmingEllipsisWord);
         g.DrawString(procList.c_str(), -1, &fGpuStatus, rProc, &sfWrap, &textWhite);
     } else {
         gpuHeader += L"СПИТЬ (D3Cold, 0 W — повне знеструмлення)";
-        g.DrawString(gpuHeader.c_str(), -1, &fGpuName, PointF(35, 588), &textGreen);
-        g.DrawString(L"[OK] Жодного фонового процесу на dGPU. Відеокарта знеструмлена для економії заряду.", -1, &fGpuStatus, PointF(35, 614), &textMuted);
+        DrawLabel(g, gpuHeader, fGpuName, RectF(35, 600, 395, 21), textGreen);
+        DrawLabel(g, L"Фонових процесів на dGPU не виявлено.", fGpuStatus, RectF(35, 626, 395, 36), textMuted, true);
     }
 }
 
@@ -422,24 +453,20 @@ void GuiWindow::PaintGraphs(Graphics& g, const TelemetryData& td, int /*w*/, int
     g.FillRectangle(&plotBg, gPlot);
     g.DrawRectangle(&plotBorder, gPlot);
 
+    float maxVal = 70.0f;
+    for (float v : history) if (v > maxVal) maxVal = v;
+    maxVal = std::ceil(maxVal / 10.0f) * 10.0f;
     Pen gridPen(Color(40, 255, 255, 255), 1.0f);
-    Font fGrid(L"Segoe UI", 7.5f, FontStyleRegular);
+    Font fGrid(L"Segoe UI", 7.5f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
     for (int p = 1; p <= 3; p++) {
         int y = gPlot.Y + (gPlot.Height * p / 4);
         g.DrawLine(&gridPen, gPlot.X, y, gPlot.X + gPlot.Width, y);
-        int wattVal = 80 - (p * 20);
-        std::wstring wTxt = std::to_wstring(wattVal) + L"W";
+        float wattVal = maxVal * (1.0f - p / 4.0f);
+        std::wstring wTxt = FormatWatts(wattVal);
         g.DrawString(wTxt.c_str(), -1, &fGrid, PointF((REAL)gPlot.X + 4, (REAL)y - 12), &textMuted);
     }
 
     if (history.size() >= 2) {
-        float maxVal = 70.0f;
-        for (float v : history) {
-            if (v > maxVal) maxVal = v;
-        }
-        maxVal = std::ceil(maxVal / 10.0f) * 10.0f;
-        if (maxVal < 30.0f) maxVal = 30.0f;
-
         std::vector<PointF> pts;
         float xStep = (float)gPlot.Width / (float)(history.size() - 1);
         for (size_t i = 0; i < history.size(); i++) {
@@ -460,9 +487,9 @@ void GuiWindow::PaintGraphs(Graphics& g, const TelemetryData& td, int /*w*/, int
         areaPath.CloseFigure();
 
         LinearGradientBrush areaBrush(
-            PointF(0, (REAL)gPlot.Y), 
+            PointF(0, (REAL)gPlot.Y),
             PointF(0, (REAL)(gPlot.Y + gPlot.Height)),
-            Color(110, 0, 229, 255), 
+            Color(110, 0, 229, 255),
             Color(10, 0, 229, 255)
         );
         g.FillPath(&areaBrush, &areaPath);
@@ -479,7 +506,7 @@ void GuiWindow::PaintGraphs(Graphics& g, const TelemetryData& td, int /*w*/, int
     }
 
     // Graph Stats Footer
-    Font fStat(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fStat(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
     float curPwr = history.empty() ? 0.0f : history.back();
     float avgPwr = 0.0f;
     float minPwr = 999.0f, maxPwr = 0.0f;
@@ -503,12 +530,12 @@ void GuiWindow::PaintGraphs(Graphics& g, const TelemetryData& td, int /*w*/, int
     DrawCard(g, 20, 388, 415, 280, L"ДЕТАЛІ АКУМУЛЯТОРА");
     DrawCard(g, 445, 388, 415, 280, L"БАЛАНС ЕНЕРГОСПОЖИВАННЯ");
 
-    Font fItemLabel(L"Segoe UI", 9.0f, FontStyleRegular);
-    Font fItemVal(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fItemLabel(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+    Font fItemVal(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
 
     auto drawBatRow = [&](int y, const std::wstring& label, const std::wstring& val, const Brush& valBrush) {
-        g.DrawString(label.c_str(), -1, &fItemLabel, PointF(35, (REAL)y), &textMuted);
-        g.DrawString(val.c_str(), -1, &fItemVal, PointF(230, (REAL)y), &valBrush);
+        DrawLabel(g, label, fItemLabel, RectF(35, (REAL)y, 183, 22), textMuted);
+        DrawLabel(g, val, fItemVal, RectF(230, (REAL)y, 190, 22), valBrush);
     };
 
     drawBatRow(418, L"Поточний рівень заряду:", std::to_wstring(td.battery.percent) + L"%", textGreen);
@@ -522,21 +549,22 @@ void GuiWindow::PaintGraphs(Graphics& g, const TelemetryData& td, int /*w*/, int
     ssVolt << std::fixed << std::setprecision(2) << (td.battery.voltageMV / 1000.0) << L" V";
     drawBatRow(574, L"Напруга на клемах:", ssVolt.str(), textWhite);
 
-    std::wstring winSaverTxt = td.winPower.isEnergySaverActive ? L"Увімкнено (Енергозбереження)" : L"Вимкнено (Збалансований)";
-    drawBatRow(600, L"Windows Energy Saver:", winSaverTxt, td.winPower.isEnergySaverActive ? textGreen : textMuted);
+    std::wstring winSaverTxt = td.winPower.isEnergySaverActive ? L"Увімкнено" : L"Вимкнено";
+    drawBatRow(600, L"Енергозбереження Windows:", winSaverTxt, td.winPower.isEnergySaverActive ? textGreen : textMuted);
 
-    std::wstring etaFull = td.battery.isAcOnline ? L"Підключено до мережі (Заряджено)" 
+    std::wstring etaFull = td.battery.isAcOnline ? L"Живлення від мережі"
+                         : td.battery.estimatedMinutes < 0 ? L"Немає даних"
                          : (std::to_wstring(td.battery.estimatedMinutes / 60) + L" год " + std::to_wstring(td.battery.estimatedMinutes % 60) + L" хв");
     drawBatRow(626, L"Розрахунковий час роботи:", etaFull, textCyan);
 
     // Right card: Components Power Split - Isolated columns to eliminate overlaps completely
     auto drawSplitRow = [&](int y, const std::wstring& comp, const std::wstring& watts, const std::wstring& desc, const Brush& b) {
-        g.DrawString(comp.c_str(), -1, &fItemVal, PointF(460, (REAL)y), &textWhite);
-        g.DrawString(watts.c_str(), -1, &fItemVal, PointF(630, (REAL)y), &b);
-        g.DrawString(desc.c_str(), -1, &fItemLabel, PointF(705, (REAL)y), &textMuted);
+        DrawLabel(g, comp, fItemVal, RectF(460, (REAL)y, 157, 22), textWhite);
+        DrawLabel(g, watts, fItemVal, RectF(625, (REAL)y, 68, 22), b);
+        DrawLabel(g, desc, fItemLabel, RectF(701, (REAL)y, 144, 22), textMuted);
     };
 
-    std::wstring dispDesc = std::to_wstring(td.refreshRate) + L" Hz | Яскравість: " + std::to_wstring(td.brightness) + L"%";
+    std::wstring dispDesc = std::to_wstring(td.refreshRate) + L" Hz • " + std::to_wstring(td.brightness) + L"%";
     drawSplitRow(418, L"Екран (Дисплей):", FormatWatts(td.displayWatts), dispDesc, textCyan);
 
     std::wstring boostDesc = (td.cpuBoost == CpuBoostMode::Disabled) ? L"Boost вимкнено" : L"Boost агресивний";
@@ -552,8 +580,8 @@ void GuiWindow::PaintGraphs(Graphics& g, const TelemetryData& td, int /*w*/, int
     drawSplitRow(574, L"Сумарне споживання:", FormatWatts(curPwr), (td.battery.isAcOnline ? L"Мережа 220V" : L"Батарея DC"), textGreen);
 
     // Quick tip at the bottom of the split
-    Font fSubHint(L"Segoe UI", 8.2f, FontStyleRegular);
-    g.DrawString(L"💡 Детальніший розклад процесів доступний у вкладках 'Процеси CPU' та 'Процеси iGPU'.", -1, &fSubHint, PointF(460, 615), &textCyan);
+    Font fSubHint(L"Segoe UI", 8.2f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+    DrawLabel(g, L"Деталі — у вкладках «Процеси CPU»\nта «Процеси iGPU».", fSubHint, RectF(460, 612, 385, 40), textCyan, true);
 }
 
 void GuiWindow::PaintCpuProcesses(Graphics& g, const TelemetryData& td, int /*w*/, int /*h*/) {
@@ -567,33 +595,33 @@ void GuiWindow::PaintCpuProcesses(Graphics& g, const TelemetryData& td, int /*w*
     // Top Summary Banner (Y: 124, H: 65, W: 840)
     DrawCard(g, 20, 124, 840, 65, L"МОНІТОРИНГ НАВАНТАЖЕННЯ ПРОЦЕСОРА (CPU)");
 
-    Font fHdrBold(L"Segoe UI", 9.8f, FontStyleBold);
-    Font fHdrReg(L"Segoe UI", 9.0f, FontStyleRegular);
+    Font fHdrBold(L"Segoe UI", 9.8f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fHdrReg(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
     std::wstring cpuTitle = td.system.cpuName + L"  |  Загальне навантаження: " + std::to_wstring((int)td.cpuUsagePercent) + L"%";
-    g.DrawString(cpuTitle.c_str(), -1, &fHdrBold, PointF(35, 146), &textCyan);
+    DrawLabel(g, cpuTitle, fHdrBold, RectF(35, 152, 810, 18), textCyan);
 
-    std::wstring cpuSub = L"Орієнтовна потужність CPU: " + FormatWatts(td.cpuWatts) + 
+    std::wstring cpuSub = L"Орієнтовна потужність CPU: " + FormatWatts(td.cpuWatts) +
                           L"  |  Режим Boost: " + (td.cpuBoost == CpuBoostMode::Disabled ? L"Вимкнено (~2.4 GHz, Еко)" : L"Агресивний (до 4.4 GHz)");
-    g.DrawString(cpuSub.c_str(), -1, &fHdrReg, PointF(35, 166), &textMuted);
+    DrawLabel(g, cpuSub, fHdrReg, RectF(35, 171, 810, 17), textMuted);
 
     // Process Table Card (Y: 198, H: 470, W: 840)
     DrawCard(g, 20, 198, 840, 470, L"ТОП ЕНЕРГОЗАТРАТНИХ ПРОЦЕСІВ НА CPU");
 
     // Table Header
-    Font fCol(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fCol(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
     g.DrawString(L"PID", -1, &fCol, PointF(35, 222), &textMuted);
     g.DrawString(L"Назва процесу", -1, &fCol, PointF(110, 222), &textMuted);
-    g.DrawString(L"Навантаження CPU", -1, &fCol, PointF(360, 222), &textMuted);
+    g.DrawString(L"CPU, %", -1, &fCol, PointF(360, 222), &textMuted);
     g.DrawString(L"Пам'ять (RAM)", -1, &fCol, PointF(500, 222), &textMuted);
-    g.DrawString(L"Потужність (Вт)", -1, &fCol, PointF(615, 222), &textMuted);
-    g.DrawString(L"Категорія / Стан", -1, &fCol, PointF(715, 222), &textMuted);
+    g.DrawString(L"Оцінка, Вт", -1, &fCol, PointF(615, 222), &textMuted);
+    g.DrawString(L"Категорія", -1, &fCol, PointF(715, 222), &textMuted);
 
     Pen linePen(Color(255, 33, 41, 54), 1.0f);
     g.DrawLine(&linePen, 35, 242, 845, 242);
 
-    Font fRow(L"Segoe UI", 9.0f, FontStyleRegular);
-    Font fRowBold(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fRow(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+    Font fRowBold(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
 
     int rowY = 250;
     for (size_t i = 0; i < td.cpuProcesses.size() && i < 11; i++) {
@@ -606,7 +634,7 @@ void GuiWindow::PaintCpuProcesses(Graphics& g, const TelemetryData& td, int /*w*
         }
 
         g.DrawString(std::to_wstring(p.pid).c_str(), -1, &fRow, PointF(35, (REAL)rowY + 6), &textMuted);
-        g.DrawString(p.name.c_str(), -1, &fRowBold, PointF(110, (REAL)rowY + 6), &textWhite);
+        DrawLabel(g, p.name, fRowBold, RectF(110, (REAL)rowY + 6, 238, 22), textWhite);
 
         wchar_t cpuBuf[32];
         swprintf_s(cpuBuf, L"%.1f %%", p.cpuPercent);
@@ -621,7 +649,7 @@ void GuiWindow::PaintCpuProcesses(Graphics& g, const TelemetryData& td, int /*w*
         std::wstring wattStr = FormatWatts(p.estimatedWatts);
         g.DrawString(wattStr.c_str(), -1, &fRowBold, PointF(615, (REAL)rowY + 6), &textCyan);
 
-        g.DrawString(p.role.c_str(), -1, &fRow, PointF(715, (REAL)rowY + 6), &textMuted);
+        DrawLabel(g, p.role, fRow, RectF(715, (REAL)rowY + 6, 130, 22), textMuted);
 
         rowY += 34;
     }
@@ -640,30 +668,30 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
     // Top Summary Banner (Y: 124, H: 65, W: 840)
     DrawCard(g, 20, 124, 840, 65, L"МОНІТОРИНГ ВБУДОВАНОЇ ГРАФІКИ (iGPU)");
 
-    Font fHdrBold(L"Segoe UI", 9.8f, FontStyleBold);
-    Font fHdrReg(L"Segoe UI", 9.0f, FontStyleRegular);
+    Font fHdrBold(L"Segoe UI", 9.8f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fHdrReg(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
-    std::wstring iGpuTitle = td.iGpuName + L"  |  Поточний стан: Активна (Апаратний 2D/3D рендеринг)";
-    g.DrawString(iGpuTitle.c_str(), -1, &fHdrBold, PointF(35, 146), &textGreen);
+    std::wstring iGpuTitle = td.iGpuName + L"  |  Віконні процеси Windows";
+    DrawLabel(g, iGpuTitle, fHdrBold, RectF(35, 152, 810, 18), textGreen);
 
-    std::wstring iGpuSub = L"[✓] Енергоефективність: Використання iGPU зберігає заряд і дозволяє дискретній dGPU спати в D3Cold (0.0 W)!";
-    g.DrawString(iGpuSub.c_str(), -1, &fHdrReg, PointF(35, 166), &textCyan);
+    std::wstring iGpuSub = L"Орієнтовний список: наявність вікна не підтверджує використання iGPU процесом.";
+    DrawLabel(g, iGpuSub, fHdrReg, RectF(35, 171, 810, 17), textCyan);
 
     // Process Table Card (Y: 198, H: 470, W: 840)
     DrawCard(g, 20, 198, 840, 470, L"ДОДАТКИ ТА ПРОЦЕСИ НА ВБУДОВАНІЙ ВІДЕОКАРТІ (iGPU)");
 
-    Font fCol(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fCol(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
     g.DrawString(L"PID", -1, &fCol, PointF(35, 222), &textMuted);
     g.DrawString(L"Додаток / Процес", -1, &fCol, PointF(110, 222), &textMuted);
-    g.DrawString(L"Призначення / Роль прискорення", -1, &fCol, PointF(360, 222), &textMuted);
+    g.DrawString(L"Призначення", -1, &fCol, PointF(360, 222), &textMuted);
     g.DrawString(L"Пам'ять (RAM)", -1, &fCol, PointF(580, 222), &textMuted);
-    g.DrawString(L"Статус живлення", -1, &fCol, PointF(690, 222), &textMuted);
+    g.DrawString(L"Визначення GPU", -1, &fCol, PointF(690, 222), &textMuted);
 
     Pen linePen(Color(255, 33, 41, 54), 1.0f);
     g.DrawLine(&linePen, 35, 242, 845, 242);
 
-    Font fRow(L"Segoe UI", 9.0f, FontStyleRegular);
-    Font fRowBold(L"Segoe UI", 9.0f, FontStyleBold);
+    Font fRow(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
+    Font fRowBold(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
 
     int rowY = 250;
     for (size_t i = 0; i < td.iGpuProcesses.size() && i < 11; i++) {
@@ -676,19 +704,19 @@ void GuiWindow::PaintIGpuProcesses(Graphics& g, const TelemetryData& td, int /*w
         }
 
         g.DrawString(std::to_wstring(p.pid).c_str(), -1, &fRow, PointF(35, (REAL)rowY + 6), &textMuted);
-        g.DrawString(p.name.c_str(), -1, &fRowBold, PointF(110, (REAL)rowY + 6), &textWhite);
-        g.DrawString(p.role.c_str(), -1, &fRow, PointF(360, (REAL)rowY + 6), &textCyan);
+        DrawLabel(g, p.name, fRowBold, RectF(110, (REAL)rowY + 6, 238, 22), textWhite);
+        DrawLabel(g, p.role, fRow, RectF(360, (REAL)rowY + 6, 208, 22), textCyan);
 
         std::wstring memStr = std::to_wstring(p.memMB) + L" MB";
         g.DrawString(memStr.c_str(), -1, &fRow, PointF(580, (REAL)rowY + 6), &textWhite);
 
-        g.DrawString(L"[✓] Еко-режим (iGPU)", -1, &fRowBold, PointF(690, (REAL)rowY + 6), &textGreen);
+        g.DrawString(L"Не підтверджено", -1, &fRowBold, PointF(690, (REAL)rowY + 6), &textGreen);
 
         rowY += 34;
     }
 
     if (td.iGpuProcesses.empty()) {
-        g.DrawString(L"Опитування віконних процесів на робочому столі...", -1, &fRow, PointF(35, 260), &textMuted);
+        g.DrawString(L"Доступних віконних процесів не знайдено.", -1, &fRow, PointF(35, 260), &textMuted);
     }
 }
 
@@ -702,14 +730,14 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
     // 1. Card 1: NVIDIA RTX Watchdog Processes (X: 20, Y: 124, W: 840, H: 240)
     DrawCard(g, 20, 124, 840, 240, L"NVIDIA GEFORCE RTX WATCHDOG - ПРОЦЕСИ НА ВІДЕОКАРТІ");
 
-    Font fStatusHeader(L"Segoe UI", 9.5f, FontStyleBold);
+    Font fStatusHeader(L"Segoe UI", 9.5f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
     std::wstring gpuSummary = td.gpu.model + L": ";
     if (td.gpu.isAwake) {
         gpuSummary += L"АКТИВНА (" + std::to_wstring((int)td.gpu.powerWatts) + L" W, " + std::to_wstring(td.gpu.temperatureC) + L"°C) — Процесів на dGPU: " + std::to_wstring(td.gpu.processes.size());
-        g.DrawString(gpuSummary.c_str(), -1, &fStatusHeader, PointF(35, 152), &textRed);
+        DrawLabel(g, gpuSummary, fStatusHeader, RectF(35, 152, 810, 22), textRed);
     } else {
         gpuSummary += L"СПИТЬ (D3Cold, 0 W — повне апаратне знеструмлення)";
-        g.DrawString(gpuSummary.c_str(), -1, &fStatusHeader, PointF(35, 152), &textGreen);
+        DrawLabel(g, gpuSummary, fStatusHeader, RectF(35, 152, 810, 22), textGreen);
     }
 
     if (td.gpu.processes.empty()) {
@@ -718,23 +746,23 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
         Pen pOkBorder(Color(120, 0, 230, 118), 1.0f);
         DrawRoundedRect(g, okBox, 6, bOkBg, &pOkBorder);
 
-        Font fOkTitle(L"Segoe UI", 11.0f, FontStyleBold);
-        Font fOkDesc(L"Segoe UI", 9.0f, FontStyleRegular);
+        Font fOkTitle(L"Segoe UI", 11.0f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+        Font fOkDesc(L"Segoe UI", 9.0f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
         g.DrawString(L"[✓] Жодного стороннього процесу на dGPU не виявлено!", -1, &fOkTitle, PointF(55, 210), &textGreen);
-        g.DrawString(L"Дискретна відеокарта перебуває в енергозберігаючому стані D3Cold.\nСпоживання живлення dGPU становить 0.0 Ватт. Ноутбук працює максимально тихо та довго.", -1, &fOkDesc, PointF(55, 240), &textWhite);
+        DrawLabel(g, L"У поточному знімку немає доступних процесів dGPU.\nСтан і споживання відеокарти наведені вище.", fOkDesc, RectF(55, 240, 770, 70), textWhite, true);
     } else {
-        Font fTableHeader(L"Segoe UI", 8.8f, FontStyleBold);
+        Font fTableHeader(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
         g.DrawString(L"PID", -1, &fTableHeader, PointF(40, 180), &textMuted);
         g.DrawString(L"Назва процесу", -1, &fTableHeader, PointF(120, 180), &textMuted);
         g.DrawString(L"Пам'ять VRAM", -1, &fTableHeader, PointF(380, 180), &textMuted);
         g.DrawString(L"Вплив на батарею", -1, &fTableHeader, PointF(520, 180), &textMuted);
 
-        Font fRow(L"Segoe UI", 8.8f, FontStyleRegular);
+        Font fRow(L"Segoe UI", 8.8f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
         int yPos = 205;
         for (size_t i = 0; i < td.gpu.processes.size() && i < 4; i++) {
             const auto& p = td.gpu.processes[i];
             g.DrawString(std::to_wstring(p.pid).c_str(), -1, &fRow, PointF(40, (REAL)yPos), &textWhite);
-            g.DrawString(p.name.c_str(), -1, &fRow, PointF(120, (REAL)yPos), &textWhite);
+            DrawLabel(g, p.name, fRow, RectF(120, (REAL)yPos, 248, 22), textWhite);
             g.DrawString((std::to_wstring(p.memoryMB) + L" MB").c_str(), -1, &fRow, PointF(380, (REAL)yPos), &textCyan);
             g.DrawString(L"Утримує dGPU активною (+35..50W)", -1, &fRow, PointF(520, (REAL)yPos), &textRed);
             yPos += 24;
@@ -749,8 +777,8 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
     // 2. Card 2: System Hardware Devices (X: 20, Y: 375, W: 840, H: 295)
     DrawCard(g, 20, 375, 840, 295, L"СИСТЕМНІ АПАРАТНІ ПРИСТРОЇ ТА МОДУЛІ");
 
-    Font fDevTitle(L"Segoe UI", 9.2f, FontStyleBold);
-    Font fDevSub(L"Segoe UI", 8.5f, FontStyleRegular);
+    Font fDevTitle(L"Segoe UI", 9.2f * 4.0f / 3.0f, FontStyleBold, UnitPixel);
+    Font fDevSub(L"Segoe UI", 8.5f * 4.0f / 3.0f, FontStyleRegular, UnitPixel);
 
     auto drawDeviceBox = [&](int x, int y, int bw, int bh, const std::wstring& name, const std::wstring& stat, const std::wstring& sub, const Brush& statBrush) {
         Rect rb(x, y, bw, bh);
@@ -758,13 +786,13 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
         Pen border(Color(255, 33, 41, 54), 1.0f);
         DrawRoundedRect(g, rb, 6, bg, &border);
 
-        g.DrawString(name.c_str(), -1, &fDevTitle, PointF((REAL)x + 12, (REAL)y + 10), &textWhite);
-        g.DrawString(stat.c_str(), -1, &fDevTitle, PointF((REAL)x + 12, (REAL)y + 30), &statBrush);
-        g.DrawString(sub.c_str(), -1, &fDevSub, PointF((REAL)x + 12, (REAL)y + 50), &textMuted);
+        DrawLabel(g, name, fDevTitle, RectF((REAL)x + 12, (REAL)y + 10, (REAL)bw - 24, 20), textWhite);
+        DrawLabel(g, stat, fDevTitle, RectF((REAL)x + 12, (REAL)y + 30, (REAL)bw - 24, 20), statBrush);
+        DrawLabel(g, sub, fDevSub, RectF((REAL)x + 12, (REAL)y + 50, (REAL)bw - 24, 20), textMuted);
     };
 
     // Row 1
-    std::wstring dispSub = std::to_wstring(td.refreshRate) + L" Hz | Яскравість: " + std::to_wstring(td.brightness) + L"%";
+    std::wstring dispSub = std::to_wstring(td.refreshRate) + L" Hz • " + std::to_wstring(td.brightness) + L"%";
     drawDeviceBox(35, 410, 260, 75, L"Дисплей ноутбука", (td.refreshRate == 60 ? L"60 Hz (Енергозбереження)" : L"144 Hz (Плавний)"), dispSub, textCyan);
 
     std::wstring cpuSub = (td.cpuBoost == CpuBoostMode::Disabled) ? L"Boost вимкнено (~2.4 GHz)" : L"Boost агресивний (до 4.4 GHz)";
@@ -785,6 +813,11 @@ void GuiWindow::PaintDevices(Graphics& g, const TelemetryData& td, int /*w*/, in
 }
 
 bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
+    RECT client;
+    GetClientRect(hWnd, &client);
+    const float scale = (std::min)(client.right / 880.0f, client.bottom / 720.0f);
+    if (scale > 0) { x = (int)std::floor(x / scale); y = (int)std::floor(y / scale); }
+
     for (const auto& btn : s_buttons) {
         if (btn.tab != -1 && btn.tab != (int)s_currentTab) continue;
         if (btn.bounds.Contains(x, y)) {
@@ -882,15 +915,15 @@ bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
                 case 20: {
                     UpdateStatus st = UpdateManager::GetStatus();
                     if (st == UpdateStatus::UpdateAvailable) {
-                        int res = MessageBoxW(hWnd, 
-                            (L"Доступна нова версія EnergySavior: " + UpdateManager::GetInfo().latestVersion + 
+                        int res = MessageBoxW(hWnd,
+                            (L"Доступна нова версія EnergySavior: " + UpdateManager::GetInfo().latestVersion +
                              L"\n\nЗавантажити та встановити оновлення зараз?").c_str(),
                             L"EnergySavior Auto-Update", MB_YESNO | MB_ICONQUESTION);
                         if (res == IDYES) {
                             UpdateManager::DownloadAndInstallAsync([hWnd](bool ok, const std::wstring& msg) {
                                 if (ok) {
-                                    int restart = MessageBoxW(hWnd, 
-                                        L"Оновлення успішно завантажено!\nПерезапустити EnergySavior зараз для оновлення?", 
+                                    int restart = MessageBoxW(hWnd,
+                                        L"Оновлення успішно завантажено!\nПерезапустити EnergySavior зараз для оновлення?",
                                         L"EnergySavior Auto-Update", MB_YESNO | MB_ICONINFORMATION);
                                     if (restart == IDYES) {
                                         UpdateManager::PerformSelfUpdateAndRestart(msg);
@@ -920,6 +953,11 @@ bool GuiWindow::HandleClick(HWND hWnd, int x, int y) {
 }
 
 void GuiWindow::HandleMouseMove(HWND hWnd, int x, int y) {
+    RECT client;
+    GetClientRect(hWnd, &client);
+    const float scale = (std::min)(client.right / 880.0f, client.bottom / 720.0f);
+    if (scale > 0) { x = (int)std::floor(x / scale); y = (int)std::floor(y / scale); }
+
     int newHover = -1;
     for (size_t i = 0; i < s_buttons.size(); i++) {
         if (s_buttons[i].tab != -1 && s_buttons[i].tab != (int)s_currentTab) continue;
